@@ -1,0 +1,216 @@
+:root {
+  --green: #1A3C34;
+  --green-mid: #2E5A4C;
+  --accent: #3D7A5F;
+  --light: #E8F0EC;
+  --cream: #F7F5F0;
+  --orange: #C05621;
+  --soft-orange: #FDF6F0;
+  --text: #1A1A1A;
+  --muted: #4A5568;
+  --danger: #c53030;
+  --ok: #276749;
+}
+
+body { background: #f0f4f1; }
+
+.app-shell {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: #fff;
+  box-shadow: 0 0 40px rgba(0,0,0,0.06);
+}
+
+.topbar {
+  background: var(--green);
+  color: #fff;
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.topbar h1 { font-size: 16px; font-weight: 700; letter-spacing: 0.5px; }
+.topbar .role { font-size: 12px; opacity: 0.85; }
+.topbar button {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.4);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.content { padding: 18px; }
+
+.card {
+  background: var(--cream);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.card h3 { font-size: 14px; color: var(--green); margin-bottom: 8px; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.btn:active { opacity: 0.85; }
+.btn-primary { background: var(--green); color: #fff; }
+.btn-accent { background: var(--accent); color: #fff; }
+.btn-orange { background: var(--orange); color: #fff; }
+.btn-outline {
+  background: transparent;
+  border: 2px solid var(--green);
+  color: var(--green);
+}
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-ok { background: var(--ok); color: #fff; }
+.btn + .btn { margin-top: 10px; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+.btn-row .btn { margin-top: 0; }
+
+input, select, textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid #d0d5dd;
+  border-radius: 10px;
+  font-size: 15px;
+  margin-bottom: 12px;
+  background: #fff;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.msg {
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+.msg-ok { background: #c6f6d5; color: #22543d; }
+.msg-err { background: #fed7d7; color: #742a2a; }
+.msg-info { background: var(--light); color: var(--green); }
+
+.photo-preview {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: 12px;
+  background: #111;
+  margin-bottom: 12px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.stat {
+  background: var(--light);
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+}
+.stat .num { font-size: 24px; font-weight: 700; color: var(--green); }
+.stat .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.notice-item {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 10px;
+}
+.notice-item .level {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+.level-warning { background: #fefcbf; color: #744210; }
+.level-notice { background: #feebc8; color: #7b341e; }
+.level-fine_recommendation { background: #fed7d7; color: #742a2a; }
+
+.empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.login-wrap {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 24px;
+  background: var(--green);
+}
+.login-box {
+  background: #fff;
+  border-radius: 16px;
+  padding: 28px 22px;
+}
+.login-box h1 {
+  font-size: 22px;
+  color: var(--green);
+  margin-bottom: 4px;
+}
+.login-box .sub {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 22px;
+}
+
+.qr-display {
+  font-family: monospace;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  background: var(--light);
+  padding: 12px;
+  border-radius: 8px;
+  text-align: center;
+  margin: 10px 0;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: var(--light);
+  color: var(--green);
+  font-weight: 600;
+}

@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Proof-to-Value Demo</title>
+<style>
+  :root {
+    --green: #1A3C34; --accent: #3D7A5F; --light: #E8F0EC;
+    --cream: #F7F5F0; --orange: #C05621; --text: #1A1A1A; --muted: #4A5568;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f4f1; color: var(--text); }
+  .shell { max-width: 480px; margin: 0 auto; min-height: 100vh; background: #fff; box-shadow: 0 0 40px rgba(0,0,0,.06); }
+  .topbar { background: var(--green); color: #fff; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; }
+  .topbar h1 { font-size: 15px; font-weight: 700; letter-spacing: .5px; }
+  .topbar .sub { font-size: 11px; opacity: .85; }
+  .topbar button { background: transparent; border: 1px solid rgba(255,255,255,.4); color: #fff; padding: 5px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+  .content { padding: 16px; }
+  .card { background: var(--cream); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+  .card h3 { font-size: 13px; color: var(--green); margin-bottom: 8px; }
+  .btn { display: block; width: 100%; padding: 13px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+  .btn:disabled { opacity: .5; }
+  .btn-primary { background: var(--green); color: #fff; }
+  .btn-ok { background: #276749; color: #fff; }
+  .btn-orange { background: var(--orange); color: #fff; }
+  .btn-outline { background: transparent; border: 2px solid var(--green); color: var(--green); }
+  .btn-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .btn-row .btn { margin-top: 0; }
+  input, select { width: 100%; padding: 11px 12px; border: 1.5px solid #d0d5dd; border-radius: 10px; font-size: 14px; margin-bottom: 10px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+  .msg { padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; }
+  .msg-ok { background: #c6f6d5; color: #22543d; }
+  .msg-err { background: #fed7d7; color: #742a2a; }
+  .photo { width: 100%; max-height: 260px; object-fit: contain; border-radius: 10px; background: #111; margin: 8px 0; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+  .stat { background: var(--light); border-radius: 10px; padding: 12px; text-align: center; }
+  .stat .num { font-size: 22px; font-weight: 700; color: var(--green); }
+  .stat .lbl { font-size: 11px; color: var(--muted); }
+  .qr { font-family: monospace; font-size: 16px; font-weight: 700; background: var(--light); padding: 10px; border-radius: 8px; text-align: center; margin: 8px 0; }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px; background: var(--light); color: var(--green); font-weight: 600; }
+  .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; background: var(--green); }
+  .login-box { background: #fff; border-radius: 16px; padding: 26px 20px; width: 100%; max-width: 380px; }
+  .login-box h1 { font-size: 22px; color: var(--green); }
+  .login-box .sub { font-size: 12px; color: var(--muted); margin: 4px 0 18px; }
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+  .quick button { font-size: 11px; padding: 4px 10px; border-radius: 6px; border: 1px solid #cbd5e0; background: #edf2f7; cursor: pointer; }
+  .notice { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; margin-bottom: 8px; font-size: 13px; }
+  .level { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 7px; border-radius: 5px; margin-bottom: 4px; }
+  .level-warning { background: #fefcbf; color: #744210; }
+  .level-notice { background: #feebc8; color: #7b341e; }
+  .level-fine_recommendation { background: #fed7d7; color: #742a2a; }
+  .empty { text-align: center; padding: 40px 16px; color: var(--muted); font-size: 14px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const API = 'http://127.0.0.1:8000';
+let token = localStorage.getItem('ptv_token');
+let user = JSON.parse(localStorage.getItem('ptv_user') || 'null');
+
+async function req(path, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const res = await fetch(API + path, { ...opts, headers });
+  if (res.status === 401) { logout(); throw new Error('Session expired'); }
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(typeof e.detail === 'string' ? e.detail : (e.detail?.[0]?.msg || res.statusText));
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+function logout() {
+  token = null; user = null;
+  localStorage.removeItem('ptv_token');
+  localStorage.removeItem('ptv_user');
+  render();
+}
+
+function setAuth(t, u) {
+  token = t; user = u;
+  localStorage.setItem('ptv_token', t);
+  localStorage.setItem('ptv_user', JSON.stringify(u));
+}
+
+function renderLogin() {
+  document.getElementById('app').innerHTML = `
+  <div class="login-wrap">
+    <div class="login-box">
+      <h1>Proof-to-Value</h1>
+      <p class="sub">Evidence system for Gwalior BWGs · Pilot Demo</p>
+      <div id="login-msg"></div>
+      <label>Email</label>
+      <input id="email" value="collector@ptv.local" />
+      <label>Password</label>
+      <input id="pass" type="password" value="collect123" />
+      <button class="btn btn-primary" onclick="doLogin()">Sign in</button>
+      <div class="quick">
+        <button onclick="fill('collector@ptv.local','collect123')">Collector</button>
+        <button onclick="fill('reviewer1@ptv.local','review123')">Reviewer1</button>
+        <button onclick="fill('reviewer2@ptv.local','review123')">Reviewer2</button>
+        <button onclick="fill('reviewer3@ptv.local','review123')">Reviewer3</button>
+        <button onclick="fill('officer@ptv.local','officer123')">Officer</button>
+        <button onclick="fill('admin@ptv.local','admin123')">Admin</button>
+      </div>
+    </div>
+  </div>`;
+}
+function fill(e, p) {
+  document.getElementById('email').value = e;
+  document.getElementById('pass').value = p;
+}
+async function doLogin() {
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('pass').value;
+  const msg = document.getElementById('login-msg');
+  try {
+    const body = new URLSearchParams({ username: email, password });
+    const res = await fetch(API + '/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+    if (!res.ok) throw new Error('Invalid credentials');
+    const data = await res.json();
+    setAuth(data.access_token, { name: data.name, role: data.role, email });
+    render();
+  } catch (e) {
+    msg.innerHTML = '<div class="msg msg-err">' + e.message + '</div>';
+  }
+}
+
+function shell(roleLabel, bodyHtml) {
+  return '<div class="shell"><div class="topbar"><div><h1>PROOF-TO-VALUE</h1><div class="sub">' +
+    user.name + ' · ' + roleLabel + '</div></div><button onclick="logout()">Logout</button></div>' +
+    '<div class="content" id="main">' + bodyHtml + '</div></div>';
+}
+
+// COLLECTOR
+function renderCollector() {
+  document.getElementById('app').innerHTML = shell('Collector',
+    '<div id="c-msg"></div><div class="card"><h3>Enter QR Code</h3>' +
+    '<input id="qr" value="PTV-2026-00001" /><button class="btn btn-primary" onclick="lookupBin()">Lookup Bin</button></div>' +
+    '<div id="bin-card" class="hidden"></div>' +
+    '<div class="card" style="font-size:12px;color:#4A5568"><strong>Demo QRs:</strong><br>' +
+    'PTV-2026-00001 Hostel A Wet · 00002 Dry<br>PTV-2026-00003 Mess Wet · 00004 Dry<br>PTV-2026-00005 Academic C Wet</div>');
+}
+let currentBin = null, selectedPhoto = null;
+async function lookupBin() {
+  const qr = document.getElementById('qr').value.trim();
+  const msg = document.getElementById('c-msg');
+  try {
+    currentBin = await req('/collector/bin/' + encodeURIComponent(qr));
+    const el = document.getElementById('bin-card');
+    el.className = 'card';
+    el.innerHTML = '<h3>Bin Found</h3><div class="qr">' + currentBin.qr_code + '</div>' +
+      '<p style="font-size:14px;margin-bottom:4px"><strong>' + currentBin.generator_name + '</strong></p>' +
+      '<p style="font-size:12px;color:#4A5568;margin-bottom:10px">Stream: <span class="badge">' + currentBin.stream + '</span></p>' +
+      '<label>Photo of open bin</label><input type="file" accept="image/*" capture="environment" id="photo" onchange="onPhoto(event)" />' +
+      '<div id="preview"></div>' +
+      '<button class="btn btn-ok" id="btn-done" onclick="submitPickup(\'done\')" disabled>Submit Clean Pickup</button>' +
+      '<button class="btn btn-outline" onclick="submitPickup(\'missed\')">Mark Missed</button>';
+    msg.innerHTML = '';
+  } catch (e) {
+    msg.innerHTML = '<div class="msg msg-err">' + e.message + '</div>';
+  }
+}
+function onPhoto(e) {
+  selectedPhoto = e.target.files[0];
+  if (!selectedPhoto) return;
+  document.getElementById('preview').innerHTML = '<img src="' + URL.createObjectURL(selectedPhoto) + '" class="photo" />';
+  document.getElementById('btn-done').disabled = false;
+}
+async function submitPickup(status) {
+  const msg = document.getElementById('c-msg');
+  if (status === 'done' && !selectedPhoto) { msg.innerHTML = '<div class="msg msg-err">Photo required</div>'; return; }
+  const fd = new FormData();
+  fd.append('bin_qr', currentBin.qr_code);
+  fd.append('status', status);
+  fd.append('device_time', new Date().toISOString());
+  if (selectedPhoto) fd.append('photo', selectedPhoto);
+  try {
+    const res = await fetch(API + '/collector/pickup', { method: 'POST', headers: { Authorization: 'Bearer ' + token }, body: fd });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || 'Failed'); }
+    msg.innerHTML = '<div class="msg msg-ok">' + (status === 'done' ? 'Pickup + photo submitted!' : 'Marked as missed') + '</div>';
+    document.getElementById('bin-card').className = 'hidden';
+    currentBin = null; selectedPhoto = null;
+  } catch (e) {
+    msg.innerHTML = '<div class="msg msg-err">' + e.message + '</div>';
+  }
+}
+
+// REVIEWER
+let reviewQueue = [];
+async function renderReviewer() {
+  document.getElementById('app').innerHTML = shell('Reviewer', '<div id="r-msg"></div><div id="r-body" class="empty">Loading…</div>');
+  try {
+    reviewQueue = await req('/reviews/queue');
+    showReview();
+  } catch (e) {
+    document.getElementById('r-body').innerHTML = '<div class="msg msg-err">' + e.message + '</div>';
+  }
+}
+function showReview() {
+  const body = document.getElementById('r-body');
+  if (!reviewQueue.length) {
+    body.innerHTML = '<div class="empty"><p style="font-size:18px;margin-bottom:6px">All clear</p><p>No photos waiting.</p>' +
+      '<button class="btn btn-outline" style="max-width:180px;margin:16px auto" onclick="renderReviewer()">Refresh</button></div>';
+    return;
+  }
+  const cur = reviewQueue[0];
+  body.innerHTML = '<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:6px">' +
+    '<h3>Review #' + cur.evidence_id + '</h3><span class="badge">' + cur.stream + '</span></div>' +
+    '<p style="font-size:11px;color:#4A5568;margin-bottom:8px">Identity hidden · ' + reviewQueue.length + ' in queue</p>' +
+    '<img src="' + API + cur.photo_url + '" class="photo" /></div>' +
+    '<div class="btn-row">' +
+    '<button class="btn btn-ok" onclick="grade(\'sorted\')">Sorted</button>' +
+    '<button class="btn btn-orange" onclick="grade(\'mixed\')">Mixed</button>' +
+    '<button class="btn btn-outline" onclick="grade(\'unclear\')">Unclear</button></div>';
+}
+async function grade(verdict) {
+  const cur = reviewQueue[0];
+  if (!cur) return;
+  const msg = document.getElementById('r-msg');
+  try {
+    await req('/reviews/', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ evidence_id: cur.evidence_id, verdict }) });
+    msg.innerHTML = '<div class="msg msg-ok">Marked as ' + verdict.toUpperCase() + '</div>';
+    reviewQueue.shift();
+    showReview();
+  } catch (e) {
+    msg.innerHTML = '<div class="msg msg-err">' + e.message + '</div>';
+  }
+}
+
+// OFFICER
+async function renderOfficer() {
+  document.getElementById('app').innerHTML = shell('Case Officer', '<div id="o-msg"></div><div id="o-body">Loading…</div>');
+  try {
+    const [stats, notices] = await Promise.all([req('/officer/dashboard'), req('/officer/notices?status=proposed')]);
+    let html = '<div class="stat-grid">' +
+      '<div class="stat"><div class="num">' + stats.total_evidence + '</div><div class="lbl">Photos</div></div>' +
+      '<div class="stat"><div class="num">' + stats.locked_verdicts + '</div><div class="lbl">Locked</div></div>' +
+      '<div class="stat"><div class="num">' + stats.proposed_notices + '</div><div class="lbl">Proposed</div></div>' +
+      '<div class="stat"><div class="num">' + (stats.verdict_breakdown?.mixed || 0) + '</div><div class="lbl">Mixed</div></div></div>' +
+      '<h3 style="font-size:14px;margin-bottom:10px;color:var(--green)">Proposed Notices</h3>';
+    if (!notices.length) html += '<div class="empty">No proposed notices</div>';
+    else notices.forEach(n => {
+      html += '<div class="notice"><span class="level level-' + n.level + '">' + n.level.replace('_',' ') + '</span>' +
+        '<div>Generator #' + n.generator_id + ' · Evidence #' + n.evidence_id + '</div>' +
+        '<div style="font-size:11px;color:#718096;margin:4px 0">' + new Date(n.created_at).toLocaleString() + '</div>' +
+        '<div style="display:flex;gap:8px;margin-top:8px">' +
+        '<button class="btn btn-ok" style="padding:8px" onclick="noticeAct(' + n.id + ',\'confirm\')">Confirm</button>' +
+        '<button class="btn btn-outline" style="padding:8px" onclick="noticeAct(' + n.id + ',\'dismiss\')">Dismiss</button></div></div>';
+    });
+    document.getElementById('o-body').innerHTML = html;
+  } catch (e) {
+    document.getElementById('o-body').innerHTML = '<div class="msg msg-err">' + e.message + '</div>';
+  }
+}
+async function noticeAct(id, action) {
+  try {
+    await req('/officer/notices/' + id + '/action', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }) });
+    document.getElementById('o-msg').innerHTML = '<div class="msg msg-ok">Notice ' + action + 'ed</div>';
+    renderOfficer();
+  } catch (e) {
+    document.getElementById('o-msg').innerHTML = '<div class="msg msg-err">' + e.message + '</div>';
+  }
+}
+
+// ADMIN
+async function renderAdmin() {
+  document.getElementById('app').innerHTML = shell('Admin',
+    '<div class="card"><h3>Switch role view</h3>' +
+    '<button class="btn btn-primary" onclick="user.role=\'collector\';renderCollector()">Collector</button>' +
+    '<button class="btn btn-primary" onclick="user.role=\'reviewer\';renderReviewer()">Reviewer</button>' +
+    '<button class="btn btn-primary" onclick="user.role=\'officer\';renderOfficer()">Officer</button></div>' +
+    '<div class="card" id="admin-bins"><h3>Bins</h3>Loading…</div>');
+  try {
+    const bins = await req('/admin/bins');
+    document.getElementById('admin-bins').innerHTML = '<h3>Bins (' + bins.length + ')</h3>' +
+      bins.map(b => '<div style="padding:6px 0;border-bottom:1px solid #e2e8f0;font-size:13px">' +
+        '<strong style="font-family:monospace">' + b.qr_code + '</strong>' +
+        '<div style="color:#4A5568">' + b.generator_name + ' · ' + b.stream + '</div></div>').join('');
+  } catch (e) {
+    document.getElementById('admin-bins').innerHTML = '<div class="msg msg-err">' + e.message + '</div>';
+  }
+}
+
+function render() {
+  if (!user || !token) { renderLogin(); return; }
+  if (user.role === 'collector') renderCollector();
+  else if (user.role === 'reviewer') renderReviewer();
+  else if (user.role === 'officer') renderOfficer();
+  else if (user.role === 'admin') renderAdmin();
+  else renderLogin();
+}
+render();
+</script>
+</body>
+</html>
