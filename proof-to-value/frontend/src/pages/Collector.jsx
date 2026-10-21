@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, getUser, clearAuth } from '../api/client'
 
@@ -11,6 +11,48 @@ export default function Collector() {
   const [preview, setPreview] = useState(null)
   const [msg, setMsg] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [gps, setGps] = useState(null)
+  const videoRef = useRef(null)
+  const canScan = typeof window !== 'undefined' && 'BarcodeDetector' in window
+
+  // Capture location when the screen opens (needs HTTPS or localhost)
+  useEffect(() => {
+    navigator.geolocation?.getCurrentPosition(
+      (p) => setGps({ lat: p.coords.latitude, lon: p.coords.longitude }),
+      () => setGps(null),
+      { enableHighAccuracy: true, timeout: 8000 }
+    )
+  }, [])
+
+  async function startScan() {
+    setScanning(true)
+    let stream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      videoRef.current.srcObject = stream
+      await videoRef.current.play()
+      const det = new window.BarcodeDetector({ formats: ['qr_code'] })
+      let stop = false
+      const tick = async () => {
+        if (stop) return
+        const codes = await det.detect(videoRef.current).catch(() => [])
+        if (codes[0]) {
+          stop = true
+          stream.getTracks().forEach((t) => t.stop())
+          setScanning(false)
+          setQr(codes[0].rawValue)
+          try { setBin(await api.getBin(codes[0].rawValue)) } catch (e) { setMsg({ type: 'err', text: e.message }) }
+          return
+        }
+        requestAnimationFrame(tick)
+      }
+      tick()
+    } catch {
+      setScanning(false)
+      setMsg({ type: 'err', text: 'Camera not available. Type the code instead.' })
+    }
+  }
 
   async function lookupBin() {
     setMsg(null)
@@ -43,6 +85,7 @@ export default function Collector() {
       fd.append('bin_qr', bin.qr_code)
       fd.append('status', status)
       fd.append('device_time', new Date().toISOString())
+      if (gps) { fd.append('latitude', gps.lat); fd.append('longitude', gps.lon) }
       if (photo) fd.append('photo', photo)
       await api.submitPickup(fd)
       setMsg({ type: 'ok', text: status === 'done' ? 'Pickup + photo submitted!' : 'Marked as missed' })
@@ -82,9 +125,16 @@ export default function Collector() {
             onChange={(e) => setQr(e.target.value)}
             placeholder="PTV-2026-00001"
           />
+          {canScan && (
+            <button className="btn btn-ok" onClick={startScan} disabled={scanning}>Scan QR with camera</button>
+          )}
+          {scanning && <video ref={videoRef} playsInline muted className="photo-preview" />}
           <button className="btn btn-primary" onClick={lookupBin} disabled={!qr.trim()}>
             Lookup Bin
           </button>
+          <p style={{ fontSize: 11, color: '#718096', marginTop: 6 }}>
+            Location: {gps ? `${gps.lat.toFixed(5)}, ${gps.lon.toFixed(5)}` : 'not captured (allow location, use HTTPS)'}
+          </p>
         </div>
 
         {bin && (

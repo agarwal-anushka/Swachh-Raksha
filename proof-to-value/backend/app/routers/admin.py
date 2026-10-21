@@ -21,6 +21,7 @@ def create_user(
         password_hash=auth.get_password_hash(payload.password),
         role=payload.role,
         zone=payload.zone,
+        generator_id=payload.generator_id,
     )
     db.add(user)
     db.commit()

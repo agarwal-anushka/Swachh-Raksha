@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from .database import get_db
 from . import models
 
-SECRET_KEY = "ptv-pilot-secret-change-in-production-2026"
+import os
+SECRET_KEY = os.getenv("PTV_SECRET_KEY", "dev-only-secret-change-me")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 12  # 12 hours
 

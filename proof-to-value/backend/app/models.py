@@ -16,6 +16,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     role = Column(String(20), nullable=False)  # collector, reviewer, officer, admin
     zone = Column(String(50), nullable=True)
+    generator_id = Column(Integer, ForeignKey("generators.id"), nullable=True)  # for role=generator
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -32,6 +33,7 @@ class Generator(Base):
     address = Column(Text)
     contact_name = Column(String(100))
     contact_phone = Column(String(20))
+    zone = Column(String(50))  # reviewers from the same zone never see this generator's photos
     status = Column(String(20), default="active")
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -77,7 +79,7 @@ class Evidence(Base):
     pickup_id = Column(Integer, ForeignKey("pickups.id"), nullable=False)
     photo_path = Column(String(500), nullable=False)
     photo_hash = Column(String(64), nullable=False)
-    prev_hash = Column(String(64))
+    prev_hash = Column(String(64), unique=True)  # unique: DB itself refuses a forked chain
     this_hash = Column(String(64), nullable=False)
     device_time = Column(DateTime)
     server_time = Column(DateTime, nullable=False)
@@ -126,10 +128,13 @@ class Notice(Base):
     generator_id = Column(Integer, ForeignKey("generators.id"), nullable=False)
     evidence_id = Column(Integer, ForeignKey("evidence.id"))
     level = Column(String(30), nullable=False)  # warning, notice, fine_recommendation
-    status = Column(String(30), default="proposed")  # proposed, confirmed, dismissed, contested
+    status = Column(String(30), default="proposed")  # proposed, confirmed, dismissed, contested, upheld, withdrawn
     officer_id = Column(Integer, ForeignKey("users.id"))
     officer_remark = Column(Text)
+    contest_text = Column(Text)
+    contested_at = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime)
 
+    evidence = relationship("Evidence")
     generator = relationship("Generator", back_populates="notices")

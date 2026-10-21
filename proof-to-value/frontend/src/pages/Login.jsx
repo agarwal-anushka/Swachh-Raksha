@@ -7,6 +7,7 @@ const ROLE_ROUTES = {
   collector: '/collector',
   reviewer: '/reviewer',
   officer: '/officer',
+  generator: '/generator',
 }
 
 export default function Login() {
@@ -37,6 +38,7 @@ export default function Login() {
       reviewer: ['reviewer1@ptv.local', 'review123'],
       officer: ['officer@ptv.local', 'officer123'],
       admin: ['admin@ptv.local', 'admin123'],
+      generator: ['generator@ptv.local', 'generator123'],
     }
     setEmail(map[role][0])
     setPassword(map[role][1])
@@ -63,7 +65,7 @@ export default function Login() {
         <div style={{ marginTop: 20, fontSize: 12, color: '#4A5568' }}>
           <p style={{ marginBottom: 8 }}>Quick login (pilot):</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {['collector', 'reviewer', 'officer', 'admin'].map((r) => (
+            {['collector', 'reviewer', 'officer', 'generator', 'admin'].map((r) => (
               <button key={r} type="button" onClick={() => quick(r)}
                 style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '1px solid #cbd5e0', background: '#edf2f7', cursor: 'pointer' }}>
                 {r}

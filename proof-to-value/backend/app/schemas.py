@@ -24,6 +24,7 @@ class UserCreate(BaseModel):
     password: str
     role: str
     zone: Optional[str] = None
+    generator_id: Optional[int] = None
 
 
 class UserOut(BaseModel):
@@ -45,6 +46,7 @@ class GeneratorCreate(BaseModel):
     address: Optional[str] = None
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
+    zone: Optional[str] = None
 
 
 class GeneratorOut(BaseModel):
@@ -54,6 +56,7 @@ class GeneratorOut(BaseModel):
     address: Optional[str]
     contact_name: Optional[str]
     contact_phone: Optional[str]
+    zone: Optional[str] = None
     status: str
 
     class Config:
@@ -147,28 +150,17 @@ class VerdictOut(BaseModel):
 
 
 # ---------- Notices ----------
-class NoticeOut(BaseModel):
-    id: int
-    generator_id: int
-    evidence_id: Optional[int]
-    level: str
-    status: str
-    officer_remark: Optional[str]
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
 class NoticeAction(BaseModel):
-    action: str  # confirm | dismiss
+    action: str  # confirm | dismiss | uphold | withdraw
     remark: Optional[str] = None
 
 
-# ---------- Reviewer queue item ----------
+class ContestIn(BaseModel):
+    text: str
+
+
+# ---------- Reviewer queue item (deliberately minimal: blind review) ----------
 class ReviewQueueItem(BaseModel):
     evidence_id: int
     photo_url: str
-    stream: str
     created_at: datetime
-    already_reviewed_by_me: bool = False

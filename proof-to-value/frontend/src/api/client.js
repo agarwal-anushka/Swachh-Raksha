@@ -82,9 +82,26 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ evidence_id, verdict }),
     }),
-  getVerdict: (id) => request(`/reviews/verdict/${id}`),
+
+  // Authenticated photos: <img> cannot send a token, so fetch -> blob URL
+  photoBlob: async (url) => {
+    const res = await fetch(`${API}${url}`, { headers: { Authorization: `Bearer ${getToken()}` } });
+    if (!res.ok) throw new Error('Photo unavailable');
+    return URL.createObjectURL(await res.blob());
+  },
+
+  // Generator
+  generatorMe: () => request('/generator/me'),
+  contest: (id, text) =>
+    request(`/generator/notices/${id}/contest`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
+    }),
 
   // Officer
+  verifyChain: () => request('/officer/chain/verify'),
+  missed: () => request('/officer/missed'),
+  demoTamper: (id) => request(`/officer/demo/tamper/${id}`, { method: 'POST' }),
+  demoRestore: () => request('/officer/demo/restore', { method: 'POST' }),
   dashboard: () => request('/officer/dashboard'),
   listNotices: (status) => request(`/officer/notices${status ? `?status=${status}` : ''}`),
   noticeAction: (id, action, remark) =>

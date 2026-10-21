@@ -9,21 +9,37 @@ export default function Officer() {
   const [notices, setNotices] = useState([])
   const [filter, setFilter] = useState('proposed')
   const [msg, setMsg] = useState(null)
+  const [chain, setChain] = useState(null)
+  const [missed, setMissed] = useState([])
 
   async function load() {
     try {
-      const [s, n] = await Promise.all([
+      const [s, n, m] = await Promise.all([
         api.dashboard(),
         api.listNotices(filter || undefined),
+        api.missed(),
       ])
       setStats(s)
       setNotices(n)
+      setMissed(m)
     } catch (e) {
       setMsg({ type: 'err', text: e.message })
     }
   }
 
   useEffect(() => { load() }, [filter])
+
+  async function verify() {
+    try { setChain(await api.verifyChain()) } catch (e) { setMsg({ type: 'err', text: e.message }) }
+  }
+
+  async function tamper(id) {
+    await api.demoTamper(id); setChain(null); setMsg({ type: 'ok', text: `Demo: evidence #${id} edited directly in the database` })
+  }
+
+  async function restore() {
+    await api.demoRestore(); setChain(null); setMsg({ type: 'ok', text: 'Demo: record restored' })
+  }
 
   async function act(id, action) {
     try {
@@ -53,6 +69,24 @@ export default function Officer() {
       <div className="content">
         {msg && <div className={`msg msg-${msg.type}`}>{msg.text}</div>}
 
+        <div className="card">
+          <h3>Evidence chain integrity</h3>
+          <button className="btn btn-primary" onClick={verify}>Verify chain</button>
+          {chain && (
+            <div className={`msg ${chain.ok ? 'msg-ok' : 'msg-err'}`} style={{ marginTop: 10 }}>
+              {chain.ok
+                ? `Chain intact: ${chain.total} records verified. Head ${chain.head?.slice(0, 16)}…`
+                : `TAMPERING DETECTED at evidence #${chain.broken_evidence_id}: ${chain.reason}`}
+            </div>
+          )}
+          {stats?.demo && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button className="btn btn-outline" style={{ padding: 8 }} onClick={() => tamper(1)}>Demo: edit record #1</button>
+              <button className="btn btn-outline" style={{ padding: 8 }} onClick={restore}>Demo: restore</button>
+            </div>
+          )}
+        </div>
+
         {stats && (
           <div className="stat-grid">
             <div className="stat">
@@ -75,7 +109,7 @@ export default function Officer() {
         )}
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-          {['proposed', 'confirmed', 'dismissed', ''].map((f) => (
+          {['proposed', 'confirmed', 'contested', 'dismissed', ''].map((f) => (
             <button
               key={f || 'all'}
               onClick={() => setFilter(f)}
@@ -94,29 +128,55 @@ export default function Officer() {
         {notices.length === 0 ? (
           <div className="empty">No notices in this filter</div>
         ) : (
-          notices.map((n) => (
-            <div key={n.id} className="notice-item">
-              <span className={`level level-${n.level}`}>{n.level.replace('_', ' ')}</span>
-              <p style={{ fontSize: 13, margin: '4px 0' }}>
-                Generator #{n.generator_id} · Evidence #{n.evidence_id}
+          notices.map((n) => <Case key={n.id} n={n} act={act} />)
+        )}
+
+        {missed.length > 0 && (
+          <div className="card" style={{ marginTop: 16 }}>
+            <h3>Missed city pickups ({stats?.missed_pickups})</h3>
+            {missed.map((m) => (
+              <p key={m.id} style={{ fontSize: 12, margin: '4px 0' }}>
+                {new Date(m.at).toLocaleDateString()} · {m.bin_label} · {m.reason || 'no reason given'}
               </p>
-              <p style={{ fontSize: 11, color: '#718096' }}>
-                {new Date(n.created_at).toLocaleString()} · {n.status}
-              </p>
-              {n.status === 'proposed' && (
-                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                  <button className="btn btn-ok" style={{ padding: '8px' }} onClick={() => act(n.id, 'confirm')}>
-                    Confirm
-                  </button>
-                  <button className="btn btn-outline" style={{ padding: '8px' }} onClick={() => act(n.id, 'dismiss')}>
-                    Dismiss
-                  </button>
-                </div>
-              )}
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function Case({ n, act }) {
+  const [src, setSrc] = useState(null)
+  useEffect(() => { if (n.photo_url) api.photoBlob(n.photo_url).then(setSrc).catch(() => {}) }, [n.photo_url])
+  return (
+    <div className="notice-item">
+      <span className={`level level-${n.level}`}>{n.level.replace('_', ' ')}</span>
+      <p style={{ fontSize: 14, margin: '6px 0 2px' }}><strong>{n.generator_name}</strong> · {n.bin_label}</p>
+      <p style={{ fontSize: 12, color: '#4A5568' }}>
+        Reviewer votes: {n.votes ? `${n.votes.mixed} mixed / ${n.votes.sorted} sorted / ${n.votes.unclear} unclear` : '-'}
+        {' '}· Mixed in last 30 days: {n.mixed_last_30_days} · all time: {n.mixed_all_time}
+      </p>
+      {src && <img src={src} alt="evidence" className="photo-preview" />}
+      <p style={{ fontSize: 11, color: '#718096', wordBreak: 'break-all' }}>
+        Captured {new Date(n.server_time).toLocaleString()}
+        {n.latitude != null && ` · ${n.latitude.toFixed(5)}, ${n.longitude.toFixed(5)}`}<br />
+        Hash {n.this_hash}
+      </p>
+      {n.contest_text && <p style={{ fontSize: 12, margin: '6px 0' }}>Generator contest: {n.contest_text}</p>}
+      <p style={{ fontSize: 11, color: '#718096' }}>{n.status}</p>
+      {n.status === 'proposed' && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <button className="btn btn-ok" style={{ padding: 8 }} onClick={() => act(n.id, 'confirm')}>Confirm</button>
+          <button className="btn btn-outline" style={{ padding: 8 }} onClick={() => act(n.id, 'dismiss')}>Dismiss</button>
+        </div>
+      )}
+      {n.status === 'contested' && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <button className="btn btn-ok" style={{ padding: 8 }} onClick={() => act(n.id, 'uphold')}>Uphold</button>
+          <button className="btn btn-outline" style={{ padding: 8 }} onClick={() => act(n.id, 'withdraw')}>Withdraw</button>
+        </div>
+      )}
     </div>
   )
 }

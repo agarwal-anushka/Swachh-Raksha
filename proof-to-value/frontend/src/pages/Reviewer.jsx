@@ -7,6 +7,7 @@ export default function Reviewer() {
   const nav = useNavigate()
   const [queue, setQueue] = useState([])
   const [current, setCurrent] = useState(null)
+  const [photo, setPhoto] = useState(null)
   const [msg, setMsg] = useState(null)
   const [loading, setLoading] = useState(false)
 
@@ -21,6 +22,13 @@ export default function Reviewer() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    let alive = true
+    setPhoto(null)
+    if (current) api.photoBlob(current.photo_url).then((u) => alive && setPhoto(u)).catch(() => {})
+    return () => { alive = false }
+  }, [current])
 
   async function grade(verdict) {
     if (!current) return
@@ -71,17 +79,11 @@ export default function Reviewer() {
             <div className="card">
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                 <h3>Review #{current.evidence_id}</h3>
-                <span className="badge">{current.stream}</span>
               </div>
               <p style={{ fontSize: 12, color: '#4A5568', marginBottom: 10 }}>
-                Identity hidden · {queue.length} in queue
+                Blind review: no location, owner or bin shown · {queue.length} in queue
               </p>
-              <img
-                src={current.photo_url}
-                alt="evidence"
-                className="photo-preview"
-                onError={(e) => { e.target.style.background = '#333'; e.target.alt = 'Photo unavailable' }}
-              />
+              {photo ? <img src={photo} alt="evidence" className="photo-preview" /> : <p>Loading photo…</p>}
             </div>
 
             <div className="btn-row">

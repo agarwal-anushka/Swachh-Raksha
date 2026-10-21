@@ -1,71 +1,139 @@
+import os
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from typing import List
 from ..database import get_db
 from .. import models, schemas, auth
+from ..services.hash_chain import verify_chain
+from ..services.verdict import mixed_in_window
 
 router = APIRouter(prefix="/officer", tags=["officer"])
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+DEMO = os.getenv("PTV_DEMO") == "1"
+_ORIGINAL = {}  # evidence_id -> original latitude, for demo restore
+
+OFFICER = Depends(auth.require_role("officer", "admin"))
 
 
-@router.get("/notices", response_model=List[schemas.NoticeOut])
-def list_notices(
-    status: str = None,
-    db: Session = Depends(get_db),
-    _: models.User = Depends(auth.require_role("officer", "admin")),
-):
+def case_view(db: Session, n: models.Notice) -> dict:
+    """Identity is revealed here, i.e. only AFTER the verdict has locked."""
+    ev, gen = n.evidence, n.generator
+    v = ev.verdict if ev else None
+    pickup = ev.pickup if ev else None
+    return {
+        "id": n.id, "level": n.level, "status": n.status,
+        "generator_id": n.generator_id, "generator_name": gen.name if gen else None,
+        "generator_type": gen.type if gen else None,
+        "bin_label": pickup.bin.label if pickup else None,
+        "stream": pickup.bin.stream if pickup else None,
+        "evidence_id": n.evidence_id,
+        "photo_url": f"/officer/photo/{n.evidence_id}" if ev else None,
+        "this_hash": ev.this_hash if ev else None,
+        "server_time": ev.server_time.isoformat() if ev else None,
+        "latitude": float(ev.latitude) if ev and ev.latitude is not None else None,
+        "longitude": float(ev.longitude) if ev and ev.longitude is not None else None,
+        "votes": {"sorted": v.sorted_count, "mixed": v.mixed_count, "unclear": v.unclear_count} if v else None,
+        "mixed_last_30_days": mixed_in_window(db, n.generator_id),
+        "mixed_all_time": db.query(models.Verdict).join(models.Evidence).join(models.Pickup).join(models.Bin)
+            .filter(models.Bin.generator_id == n.generator_id, models.Verdict.final_verdict == "mixed").count(),
+        "officer_remark": n.officer_remark, "contest_text": n.contest_text,
+        "created_at": n.created_at.isoformat(),
+    }
+
+
+@router.get("/notices")
+def list_notices(status: str = None, db: Session = Depends(get_db), _: models.User = OFFICER):
     q = db.query(models.Notice)
     if status:
         q = q.filter(models.Notice.status == status)
-    return q.order_by(models.Notice.created_at.desc()).all()
+    return [case_view(db, n) for n in q.order_by(models.Notice.created_at.desc()).all()]
 
 
-@router.post("/notices/{notice_id}/action", response_model=schemas.NoticeOut)
-def act_on_notice(
-    notice_id: int,
-    payload: schemas.NoticeAction,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.require_role("officer", "admin")),
-):
+@router.get("/photo/{evidence_id}")
+def original_photo(evidence_id: int, db: Session = Depends(get_db), _: models.User = OFFICER):
+    ev = db.query(models.Evidence).filter(models.Evidence.id == evidence_id).first()
+    if not ev or not ev.verdict:  # photo is released to officers only after lock
+        raise HTTPException(404, "Not available")
+    return FileResponse(os.path.join(UPLOAD_DIR, ev.photo_path), media_type="image/jpeg",
+                        headers={"Cache-Control": "no-store"})
+
+
+ACTIONS = {
+    "proposed": {"confirm": "confirmed", "dismiss": "dismissed"},
+    "contested": {"uphold": "upheld", "withdraw": "withdrawn"},
+}
+
+
+@router.post("/notices/{notice_id}/action")
+def act_on_notice(notice_id: int, payload: schemas.NoticeAction, db: Session = Depends(get_db),
+                  current_user: models.User = OFFICER):
     notice = db.query(models.Notice).filter(models.Notice.id == notice_id).first()
     if not notice:
         raise HTTPException(404, "Notice not found")
-    if notice.status != "proposed":
-        raise HTTPException(400, f"Notice is already {notice.status}")
-
-    if payload.action == "confirm":
-        notice.status = "confirmed"
-    elif payload.action == "dismiss":
-        notice.status = "dismissed"
-    else:
-        raise HTTPException(400, "action must be confirm or dismiss")
-
+    allowed = ACTIONS.get(notice.status, {})
+    if payload.action not in allowed:
+        raise HTTPException(400, f"Cannot '{payload.action}' a notice that is {notice.status}")
+    notice.status = allowed[payload.action]
     notice.officer_id = current_user.id
-    notice.officer_remark = payload.remark
+    notice.officer_remark = payload.remark or notice.officer_remark
     notice.updated_at = datetime.utcnow()
     db.commit()
-    db.refresh(notice)
-    return notice
+    return case_view(db, notice)
+
+
+@router.get("/missed")
+def missed_pickups(db: Session = Depends(get_db), _: models.User = OFFICER):
+    """Pickups the city side marked as missed (accountability log)."""
+    rows = db.query(models.Pickup).filter(models.Pickup.status == "missed").order_by(models.Pickup.created_at.desc()).limit(50).all()
+    return [{"id": p.id, "bin_label": p.bin.label, "generator_name": p.bin.generator.name,
+             "reason": p.missed_reason, "at": p.created_at.isoformat()} for p in rows]
+
+
+@router.get("/chain/verify")
+def chain_verify(db: Session = Depends(get_db), _: models.User = OFFICER):
+    return verify_chain(db, UPLOAD_DIR)
 
 
 @router.get("/dashboard")
-def dashboard_stats(
-    db: Session = Depends(get_db),
-    _: models.User = Depends(auth.require_role("officer", "admin")),
-):
+def dashboard_stats(db: Session = Depends(get_db), _: models.User = OFFICER):
     total_evidence = db.query(models.Evidence).count()
-    locked_verdicts = db.query(models.Verdict).count()
-    pending_reviews = total_evidence - locked_verdicts
-    proposed_notices = db.query(models.Notice).filter(models.Notice.status == "proposed").count()
-    confirmed_notices = db.query(models.Notice).filter(models.Notice.status == "confirmed").count()
-    mixed = db.query(models.Verdict).filter(models.Verdict.final_verdict == "mixed").count()
-    sorted_ = db.query(models.Verdict).filter(models.Verdict.final_verdict == "sorted").count()
-
+    locked = db.query(models.Verdict).count()
+    count = lambda st: db.query(models.Notice).filter(models.Notice.status == st).count()
+    vb = lambda v: db.query(models.Verdict).filter(models.Verdict.final_verdict == v).count()
     return {
-        "total_evidence": total_evidence,
-        "locked_verdicts": locked_verdicts,
-        "pending_reviews": pending_reviews,
-        "proposed_notices": proposed_notices,
-        "confirmed_notices": confirmed_notices,
-        "verdict_breakdown": {"sorted": sorted_, "mixed": mixed},
+        "total_evidence": total_evidence, "locked_verdicts": locked,
+        "pending_reviews": total_evidence - locked,
+        "proposed_notices": count("proposed"), "confirmed_notices": count("confirmed"),
+        "contested_notices": count("contested"),
+        "missed_pickups": db.query(models.Pickup).filter(models.Pickup.status == "missed").count(),
+        "verdict_breakdown": {"sorted": vb("sorted"), "mixed": vb("mixed"), "unclear": vb("unclear")},
+        "demo": DEMO,
     }
+
+
+# ---- demo-only: simulate someone editing the database by hand (PTV_DEMO=1) ----
+@router.post("/demo/tamper/{evidence_id}")
+def demo_tamper(evidence_id: int, db: Session = Depends(get_db), _: models.User = OFFICER):
+    if not DEMO:
+        raise HTTPException(404, "Not found")
+    ev = db.query(models.Evidence).filter(models.Evidence.id == evidence_id).first()
+    if not ev:
+        raise HTTPException(404, "Evidence not found")
+    _ORIGINAL[evidence_id] = ev.latitude
+    ev.latitude = (float(ev.latitude) if ev.latitude is not None else 26.2183) + 0.01
+    db.commit()
+    return {"tampered": evidence_id}
+
+
+@router.post("/demo/restore")
+def demo_restore(db: Session = Depends(get_db), _: models.User = OFFICER):
+    if not DEMO:
+        raise HTTPException(404, "Not found")
+    for eid, lat in list(_ORIGINAL.items()):
+        ev = db.query(models.Evidence).filter(models.Evidence.id == eid).first()
+        if ev:
+            ev.latitude = lat
+    _ORIGINAL.clear()
+    db.commit()
+    return {"restored": True}

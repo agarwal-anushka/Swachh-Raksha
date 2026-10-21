@@ -5,6 +5,7 @@ import Collector from './pages/Collector'
 import Reviewer from './pages/Reviewer'
 import Officer from './pages/Officer'
 import Admin from './pages/Admin'
+import Generator from './pages/Generator'
 
 function Private({ role, children }) {
   const user = getUser()
@@ -23,6 +24,7 @@ export default function App() {
       <Route path="/collector" element={<Private role="collector"><Collector /></Private>} />
       <Route path="/reviewer" element={<Private role="reviewer"><Reviewer /></Private>} />
       <Route path="/officer" element={<Private role="officer"><Officer /></Private>} />
+      <Route path="/generator" element={<Private role="generator"><Generator /></Private>} />
       <Route path="/admin" element={<Private role="admin"><Admin /></Private>} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
