@@ -74,17 +74,25 @@ export default function Collector() {
       streamRef.current = stream
       const video = videoRef.current
       video.srcObject = stream
-      await video.play()
+      await video.play().catch(() => {}) // autoplay hiccups are not fatal; frames still arrive
+      stream.getVideoTracks()[0]?.addEventListener('ended', () => {
+        if (streamRef.current) { stopScan(); setMsg({ type: 'err', text: 'Camera stopped by the phone or another app. Tap Scan again.' }) }
+      })
       const canvas = canvasRef.current
       const ctx = canvas.getContext('2d', { willReadFrequently: true })
+      let busy = false
       const tick = async () => {
         if (!streamRef.current) return
-        if (video.readyState === video.HAVE_ENOUGH_DATA) {
-          canvas.width = video.videoWidth
-          canvas.height = video.videoHeight
-          ctx.drawImage(video, 0, 0)
+        if (!busy && video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth) {
+          busy = true
+          // Downscale frames: much faster on phones, still reads a QR at normal distance.
+          const scale = Math.min(1, 640 / video.videoWidth)
+          canvas.width = Math.round(video.videoWidth * scale)
+          canvas.height = Math.round(video.videoHeight * scale)
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
           const img = ctx.getImageData(0, 0, canvas.width, canvas.height)
           const code = jsQR(img.data, img.width, img.height)
+          busy = false
           if (code && code.data) {
             stopScan()
             setQr(code.data)
@@ -92,7 +100,7 @@ export default function Collector() {
             return
           }
         }
-        requestAnimationFrame(tick)
+        setTimeout(() => requestAnimationFrame(tick), 80) // ~12 scans per second is plenty
       }
       tick()
     } catch (err) {
@@ -191,6 +199,7 @@ export default function Collector() {
             {scanning ? 'Cancel scan' : 'Scan QR with camera'}
           </button>
           <video ref={videoRef} playsInline muted className="photo-preview" style={{ display: scanning ? 'block' : 'none' }} />
+          {scanning && <p style={{ fontSize: 12, color: '#3D7A5F', marginTop: 6 }}>Camera on. Point it at the QR code.</p>}
           <canvas ref={canvasRef} style={{ display: 'none' }} />
           <button className="btn btn-primary" onClick={lookupBin} disabled={!qr.trim()}>
             Lookup Bin

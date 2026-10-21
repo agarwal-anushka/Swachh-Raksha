@@ -11,7 +11,8 @@ pip install -r requirements.txt
 PTV_DEMO=1 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000   # PTV_DEMO=1 enables the tamper demo buttons
 
 # frontend (second terminal)
-cd frontend && npm install && npm run dev      # http://localhost:5173
+cd frontend && npm install && npm run demo     # builds and serves http://localhost:5173 (use this for phones: no live-reload, so the page never restarts mid-scan)
+# for development with hot reload, use: npm run dev
 ```
 
 Camera QR scan (any browser, via jsQR) and GPS need HTTPS or localhost (use `ngrok http 5173` for a phone).
