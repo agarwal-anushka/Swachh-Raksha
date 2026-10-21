@@ -38,10 +38,18 @@ Pre-seeded QR codes: `PTV-2026-00001..00005` (Hostel A wet/dry, Mess wet/dry, Ac
 5. **Generator**: sees the confirmed notice with its evidence and can **contest** it; the officer then upholds or withdraws.
 6. **Tamper test** (officer page, needs `PTV_DEMO=1`): click *Verify chain* (green), *Demo: edit record #1*, *Verify chain* again (red, names the broken record), *Demo: restore*.
 
+## Extra features
+
+- **Hidden test photos:** Admin page, upload a photo with its known answer. It is mixed into every reviewer's queue (every 3rd slot) and looks identical to a real one. The officer page shows each reviewer's test accuracy and agreement with the final verdict.
+- **Collector bonus:** shown to the collector and the officer. Only pickups whose verdict locked as "sorted" count (illustrative Rs 5 each; set `PTV_BONUS_PER_CLEAN`).
+- **Offline queue + compression:** photos are shrunk on the phone (max 1600 px). With no network, a pickup is saved on the phone and uploaded on reconnect (or "Sync now"). The phone's capture time is kept; the server still stamps its own time.
+- **Printable QR codes:** Admin page shows a QR image for every bin.
+- **Monthly compliance pack:** officer page, CSV with one row per generator (pickups, verdicts, segregation rate, notices, contests).
+
 ## What is and is not built
 
-Built: QR + photo + GPS capture, SHA-256 chain over photo, bin, both timestamps and location (with verify), blind 3-reviewer majority, officer case view, generator view and contest, missed-pickup log, role-based access, authenticated photo access.
+Built: everything above plus QR + photo + GPS capture, SHA-256 chain over photo, bin, both timestamps and location (with verify), blind 3-reviewer majority, officer case view, generator view and contest, missed-pickup log, role-based access, authenticated photo access.
 
-Not built (planned): hidden test photos, offline queue, on-device compression, S3 storage, collector bonus, SMS/WhatsApp notices, fine calculation, Bio-Pod management. The pilot uses SQLite; the design targets PostgreSQL.
+Not built (planned): SMS/WhatsApp notices, fine calculation and payment, Bio-Pod management, S3 storage. The pilot uses SQLite; the design targets PostgreSQL.
 
-Known limits: the chain lock is per process (single server); the chain proves records were not altered after capture, not that the photo is of the right bin.
+Known limits: the chain lock is per process (single server); the chain proves records were not altered after capture, not that the photo is of the right bin; the offline queue needs a browser with IndexedDB.

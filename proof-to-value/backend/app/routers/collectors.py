@@ -9,6 +9,12 @@ from ..services.photos import validate_image
 
 router = APIRouter(prefix="/collector", tags=["collector"])
 
+
+@router.get("/stats")
+def my_stats(db: Session = Depends(get_db), current_user: models.User = Depends(auth.require_role("collector", "admin"))):
+    from .officers import collector_stats
+    return collector_stats(db, current_user.id)
+
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 

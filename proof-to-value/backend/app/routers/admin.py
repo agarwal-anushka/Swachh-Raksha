@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+import io, os, uuid
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import List
 from ..database import get_db
@@ -99,3 +101,44 @@ def list_bins(
         item.generator_name = b.generator.name if b.generator else None
         result.append(item)
     return result
+
+
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+ADMIN = Depends(auth.require_role("admin"))
+
+
+@router.get("/bins/{bin_id}/qr.png")
+def bin_qr(bin_id: int, db: Session = Depends(get_db), _: models.User = ADMIN):
+    import qrcode
+    b = db.query(models.Bin).filter(models.Bin.id == bin_id).first()
+    if not b:
+        raise HTTPException(404, "Bin not found")
+    buf = io.BytesIO()
+    qrcode.make(b.qr_code).save(buf, format="PNG")
+    return Response(content=buf.getvalue(), media_type="image/png")
+
+
+@router.post("/test-photos")
+async def add_test_photo(expected: str = Form(...), photo: UploadFile = File(...),
+                         db: Session = Depends(get_db), _: models.User = ADMIN):
+    """Known-answer photo that is silently mixed into reviewers' queues."""
+    from ..services.photos import validate_image
+    if expected not in ("sorted", "mixed"):
+        raise HTTPException(400, "expected must be sorted or mixed")
+    content = await photo.read()
+    try:
+        validate_image(content)
+    except Exception:
+        raise HTTPException(400, "File is not a valid image")
+    name = f"test_{uuid.uuid4().hex[:12]}.jpg"
+    with open(os.path.join(UPLOAD_DIR, name), "wb") as f:
+        f.write(content)
+    t = models.TestPhoto(photo_path=name, expected=expected)
+    db.add(t)
+    db.commit()
+    return {"id": t.id, "expected": expected}
+
+
+@router.get("/test-photos")
+def list_test_photos(db: Session = Depends(get_db), _: models.User = ADMIN):
+    return [{"id": t.id, "expected": t.expected} for t in db.query(models.TestPhoto).all()]

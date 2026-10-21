@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, getUser, clearAuth } from '../api/client'
+import { compress, enqueue, listQueue, removeFromQueue } from '../api/offline'
 
 export default function Collector() {
   const user = getUser()
@@ -13,8 +14,36 @@ export default function Collector() {
   const [loading, setLoading] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [gps, setGps] = useState(null)
+  const [stats, setStats] = useState(null)
+  const [pending, setPending] = useState(0)
   const videoRef = useRef(null)
   const canScan = typeof window !== 'undefined' && 'BarcodeDetector' in window
+
+  async function refresh() {
+    api.myStats().then(setStats).catch(() => {})
+    listQueue().then((q) => setPending(q.length)).catch(() => {})
+  }
+
+  async function sync() {
+    const q = await listQueue().catch(() => [])
+    for (const item of q) {
+      const fd = new FormData()
+      Object.entries(item.fields).forEach(([k, v]) => fd.append(k, v))
+      if (item.photo) fd.append('photo', new File([item.photo], 'bin.jpg', { type: 'image/jpeg' }))
+      try { await api.submitPickup(fd); await removeFromQueue(item.id) } catch (e) {
+        if (e instanceof TypeError) break // still offline, keep the rest
+        await removeFromQueue(item.id)    // server rejected it: don't retry forever
+        setMsg({ type: 'err', text: `Queued pickup rejected: ${e.message}` })
+      }
+    }
+    refresh()
+  }
+
+  useEffect(() => {
+    refresh(); sync()
+    window.addEventListener('online', sync)
+    return () => window.removeEventListener('online', sync)
+  }, [])
 
   // Capture location when the screen opens (needs HTTPS or localhost)
   useEffect(() => {
@@ -68,8 +97,7 @@ export default function Collector() {
   function onPhoto(e) {
     const f = e.target.files?.[0]
     if (!f) return
-    setPhoto(f)
-    setPreview(URL.createObjectURL(f))
+    compress(f).then((small) => { setPhoto(small); setPreview(URL.createObjectURL(small)) })
   }
 
   async function submit(status) {
@@ -87,8 +115,18 @@ export default function Collector() {
       fd.append('device_time', new Date().toISOString())
       if (gps) { fd.append('latitude', gps.lat); fd.append('longitude', gps.lon) }
       if (photo) fd.append('photo', photo)
-      await api.submitPickup(fd)
-      setMsg({ type: 'ok', text: status === 'done' ? 'Pickup + photo submitted!' : 'Marked as missed' })
+      try {
+        await api.submitPickup(fd)
+        setMsg({ type: 'ok', text: status === 'done' ? 'Pickup + photo submitted!' : 'Marked as missed' })
+      } catch (err) {
+        if (!(err instanceof TypeError)) throw err
+        // No network: keep it on the phone, send automatically when back online.
+        const fields = {}
+        fd.forEach((v, k) => { if (k !== 'photo') fields[k] = v })
+        await enqueue({ fields, photo: photo || null })
+        setMsg({ type: 'ok', text: 'Offline: saved on this phone and will upload when the network returns.' })
+      }
+      refresh()
       setBin(null)
       setQr('')
       setPhoto(null)
@@ -167,6 +205,17 @@ export default function Collector() {
             >
               Mark Missed
             </button>
+          </div>
+        )}
+
+        {stats && (
+          <div className="card" style={{ fontSize: 13 }}>
+            <strong>My record</strong>
+            <div style={{ marginTop: 6 }}>
+              Pickups done: {stats.done} · missed: {stats.missed}<br />
+              Verified clean: {stats.verified_clean} · bonus: ₹{stats.bonus_rupees} (pilot rate ₹{stats.rate} per clean pickup)
+              {pending > 0 && <><br /><strong>{pending} waiting to upload</strong> <button onClick={sync} style={{ marginLeft: 6 }}>Sync now</button></>}
+            </div>
           </div>
         )}
 

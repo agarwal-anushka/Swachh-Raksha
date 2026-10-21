@@ -76,11 +76,11 @@ export const api = {
 
   // Reviewer
   reviewQueue: () => request('/reviews/queue'),
-  submitReview: (evidence_id, verdict) =>
+  submitReview: (ref, verdict) =>
     request('/reviews/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ evidence_id, verdict }),
+      body: JSON.stringify({ ref, verdict }),
     }),
 
   // Authenticated photos: <img> cannot send a token, so fetch -> blob URL
@@ -96,6 +96,27 @@ export const api = {
     request(`/generator/notices/${id}/contest`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
     }),
+
+  // Collector extras
+  myStats: () => request('/collector/stats'),
+
+  // Admin extras
+  qrBlob: (id) => api.photoBlob(`/admin/bins/${id}/qr.png`),
+  addTestPhoto: async (fd) => {
+    const res = await fetch(`${API}/admin/test-photos`, { method: 'POST', headers: { Authorization: `Bearer ${getToken()}` }, body: fd });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Upload failed');
+    return res.json();
+  },
+  listTestPhotos: () => request('/admin/test-photos'),
+
+  // Officer extras
+  collectors: () => request('/officer/collectors'),
+  reviewers: () => request('/officer/reviewers'),
+  downloadReport: async (month) => {
+    const res = await fetch(`${API}/officer/report${month ? `?month=${month}` : ''}`, { headers: { Authorization: `Bearer ${getToken()}` } });
+    if (!res.ok) throw new Error('Report failed');
+    return URL.createObjectURL(await res.blob());
+  },
 
   // Officer
   verifyChain: () => request('/officer/chain/verify'),

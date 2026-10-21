@@ -8,7 +8,7 @@ export default function Admin() {
   const [gens, setGens] = useState([])
   const [bins, setBins] = useState([])
   const [msg, setMsg] = useState(null)
-  const [genForm, setGenForm] = useState({ name: '', type: 'hostel' })
+  const [genForm, setGenForm] = useState({ name: '', type: 'hostel', zone: '' })
   const [binForm, setBinForm] = useState({ generator_id: '', stream: 'wet', label: '' })
 
   async function load() {
@@ -28,11 +28,27 @@ export default function Admin() {
     try {
       await api.createGenerator(genForm)
       setMsg({ type: 'ok', text: 'Generator created' })
-      setGenForm({ name: '', type: 'hostel' })
+      setGenForm({ name: '', type: 'hostel', zone: '' })
       load()
     } catch (err) {
       setMsg({ type: 'err', text: err.message })
     }
+  }
+
+  const [tests, setTests] = useState([])
+  const [testForm, setTestForm] = useState({ expected: 'mixed', file: null })
+  useEffect(() => { api.listTestPhotos().then(setTests).catch(() => {}) }, [])
+
+  async function addTest(e) {
+    e.preventDefault()
+    try {
+      const fd = new FormData()
+      fd.append('expected', testForm.expected)
+      fd.append('photo', testForm.file)
+      await api.addTestPhoto(fd)
+      setMsg({ type: 'ok', text: 'Test photo added. It will appear in reviewers\' queues like any other.' })
+      setTests(await api.listTestPhotos())
+    } catch (err) { setMsg({ type: 'err', text: err.message }) }
   }
 
   async function addBin(e) {
@@ -78,6 +94,7 @@ export default function Admin() {
               <option value="academic">Academic</option>
               <option value="other">Other</option>
             </select>
+            <input placeholder="Zone (e.g. Zone-1): reviewers in this zone never see its photos" value={genForm.zone} onChange={(e) => setGenForm({ ...genForm, zone: e.target.value })} />
             <button className="btn btn-primary">Create Generator</button>
           </form>
         </div>
@@ -101,11 +118,25 @@ export default function Admin() {
         </div>
 
         <div className="card">
+          <h3>Hidden test photos ({tests.length})</h3>
+          <p style={{ fontSize: 12, color: '#4A5568', marginBottom: 8 }}>Known-answer photos silently mixed into reviewers' queues to measure reviewer quality.</p>
+          <form onSubmit={addTest}>
+            <select value={testForm.expected} onChange={(e) => setTestForm({ ...testForm, expected: e.target.value })}>
+              <option value="mixed">Correct answer: Mixed</option>
+              <option value="sorted">Correct answer: Sorted</option>
+            </select>
+            <input type="file" accept="image/*" onChange={(e) => setTestForm({ ...testForm, file: e.target.files[0] })} required />
+            <button className="btn btn-primary">Add test photo</button>
+          </form>
+        </div>
+
+        <div className="card">
           <h3>Bins ({bins.length})</h3>
           {bins.map((b) => (
             <div key={b.id} style={{ padding: '8px 0', borderBottom: '1px solid #e2e8f0', fontSize: 13 }}>
               <strong style={{ fontFamily: 'monospace' }}>{b.qr_code}</strong>
               <div style={{ color: '#4A5568' }}>{b.generator_name} · {b.stream}</div>
+              <QR id={b.id} />
             </div>
           ))}
         </div>
@@ -118,4 +149,10 @@ export default function Admin() {
       </div>
     </div>
   )
+}
+
+function QR({ id }) {
+  const [src, setSrc] = useState(null)
+  useEffect(() => { api.qrBlob(id).then(setSrc).catch(() => {}) }, [id])
+  return src ? <img src={src} alt="QR" style={{ width: 96, height: 96, marginTop: 6 }} /> : null
 }

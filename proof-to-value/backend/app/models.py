@@ -138,3 +138,25 @@ class Notice(Base):
 
     evidence = relationship("Evidence")
     generator = relationship("Generator", back_populates="notices")
+
+
+class TestPhoto(Base):
+    """Admin-supplied photo with a known answer, mixed invisibly into reviewers' queues."""
+    __tablename__ = "test_photos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    photo_path = Column(String(500), nullable=False)
+    expected = Column(String(20), nullable=False)  # sorted | mixed
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class TestResponse(Base):
+    __tablename__ = "test_responses"
+    __table_args__ = (UniqueConstraint("test_id", "reviewer_id", name="uq_test_reviewer"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    test_id = Column(Integer, ForeignKey("test_photos.id"), nullable=False)
+    reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    verdict = Column(String(20), nullable=False)
+    correct = Column(Boolean, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)

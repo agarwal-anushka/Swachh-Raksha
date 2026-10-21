@@ -121,7 +121,7 @@ class PickupOut(BaseModel):
 
 # ---------- Reviews ----------
 class ReviewCreate(BaseModel):
-    evidence_id: int
+    ref: str  # "e<id>" real evidence or "t<id>" hidden test photo (reviewer can't tell which)
     verdict: str  # sorted | mixed | unclear
 
 
@@ -161,6 +161,6 @@ class ContestIn(BaseModel):
 
 # ---------- Reviewer queue item (deliberately minimal: blind review) ----------
 class ReviewQueueItem(BaseModel):
-    evidence_id: int
+    ref: str
     photo_url: str
     created_at: datetime

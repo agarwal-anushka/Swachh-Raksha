@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import models, schemas, auth
@@ -137,3 +137,70 @@ def demo_restore(db: Session = Depends(get_db), _: models.User = OFFICER):
     _ORIGINAL.clear()
     db.commit()
     return {"restored": True}
+
+
+BONUS_PER_CLEAN = int(os.getenv("PTV_BONUS_PER_CLEAN", "5"))  # rupees; illustrative pilot setting
+
+
+def collector_stats(db: Session, collector_id: int) -> dict:
+    pk = db.query(models.Pickup).filter(models.Pickup.collector_id == collector_id)
+    clean = (db.query(models.Verdict).join(models.Evidence).join(models.Pickup)
+             .filter(models.Pickup.collector_id == collector_id, models.Verdict.final_verdict == "sorted").count())
+    return {"done": pk.filter(models.Pickup.status == "done").count(),
+            "missed": pk.filter(models.Pickup.status == "missed").count(),
+            "verified_clean": clean, "bonus_rupees": clean * BONUS_PER_CLEAN, "rate": BONUS_PER_CLEAN}
+
+
+@router.get("/collectors")
+def collectors(db: Session = Depends(get_db), _: models.User = OFFICER):
+    return [{"name": u.name, **collector_stats(db, u.id)}
+            for u in db.query(models.User).filter(models.User.role == "collector").all()]
+
+
+@router.get("/reviewers")
+def reviewers(db: Session = Depends(get_db), _: models.User = OFFICER):
+    """Reviewer quality from hidden test photos, plus agreement with the final majority."""
+    out = []
+    for u in db.query(models.User).filter(models.User.role == "reviewer").all():
+        tests = db.query(models.TestResponse).filter(models.TestResponse.reviewer_id == u.id).all()
+        mine = (db.query(models.Review, models.Verdict)
+                .join(models.Verdict, models.Verdict.evidence_id == models.Review.evidence_id)
+                .filter(models.Review.reviewer_id == u.id).all())
+        agree = sum(r.verdict == v.final_verdict for r, v in mine)
+        out.append({"name": u.name, "zone": u.zone, "tests_answered": len(tests),
+                    "tests_correct": sum(t.correct for t in tests),
+                    "test_accuracy": round(100 * sum(t.correct for t in tests) / len(tests)) if tests else None,
+                    "graded": len(mine), "agree_with_majority": agree})
+    return out
+
+
+@router.get("/report")
+def monthly_report(month: str = None, db: Session = Depends(get_db), _: models.User = OFFICER):
+    """Monthly compliance pack (CSV), one row per generator. month=YYYY-MM, default current."""
+    import csv, io
+    month = month or datetime.utcnow().strftime("%Y-%m")
+    try:
+        start = datetime.strptime(month, "%Y-%m")
+    except ValueError:
+        raise HTTPException(400, "month must be YYYY-MM")
+    end = datetime(start.year + (start.month == 12), start.month % 12 + 1, 1)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["month", "generator", "type", "pickups_done", "pickups_missed", "verdict_sorted", "verdict_mixed",
+                "verdict_unclear", "segregation_rate_pct", "warnings", "notices", "fine_recommendations",
+                "confirmed", "contested", "withdrawn_or_dismissed"])
+    for g in db.query(models.Generator).all():
+        pk = (db.query(models.Pickup).join(models.Bin).filter(models.Bin.generator_id == g.id,
+              models.Pickup.created_at >= start, models.Pickup.created_at < end).all())
+        vd = [p.evidence.verdict.final_verdict for p in pk if p.evidence and p.evidence.verdict]
+        ns = db.query(models.Notice).filter(models.Notice.generator_id == g.id,
+              models.Notice.created_at >= start, models.Notice.created_at < end).all()
+        s, m, u = vd.count("sorted"), vd.count("mixed"), vd.count("unclear")
+        w.writerow([month, g.name, g.type, sum(p.status == "done" for p in pk), sum(p.status == "missed" for p in pk),
+                    s, m, u, round(100 * s / (s + m)) if s + m else "",
+                    sum(n.level == "warning" for n in ns), sum(n.level == "notice" for n in ns),
+                    sum(n.level == "fine_recommendation" for n in ns),
+                    sum(n.status in ("confirmed", "upheld") for n in ns), sum(n.status == "contested" for n in ns),
+                    sum(n.status in ("withdrawn", "dismissed") for n in ns)])
+    return Response(content=buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="compliance_{month}.csv"'})

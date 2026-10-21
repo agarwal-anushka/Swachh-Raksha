@@ -35,10 +35,10 @@ export default function Reviewer() {
     setLoading(true)
     setMsg(null)
     try {
-      await api.submitReview(current.evidence_id, verdict)
+      await api.submitReview(current.ref, verdict)
       setMsg({ type: 'ok', text: `Marked as ${verdict.toUpperCase()}` })
       // Remove from local queue and show next
-      const next = queue.filter((q) => q.evidence_id !== current.evidence_id)
+      const next = queue.filter((q) => q.ref !== current.ref)
       setQueue(next)
       setCurrent(next[0] || null)
     } catch (e) {
@@ -78,7 +78,7 @@ export default function Reviewer() {
           <>
             <div className="card">
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                <h3>Review #{current.evidence_id}</h3>
+                <h3>Photo to grade</h3>
               </div>
               <p style={{ fontSize: 12, color: '#4A5568', marginBottom: 10 }}>
                 Blind review: no location, owner or bin shown · {queue.length} in queue

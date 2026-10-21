@@ -11,6 +11,8 @@ export default function Officer() {
   const [msg, setMsg] = useState(null)
   const [chain, setChain] = useState(null)
   const [missed, setMissed] = useState([])
+  const [revs, setRevs] = useState([])
+  const [cols, setCols] = useState([])
 
   async function load() {
     try {
@@ -22,12 +24,21 @@ export default function Officer() {
       setStats(s)
       setNotices(n)
       setMissed(m)
+      setRevs(await api.reviewers())
+      setCols(await api.collectors())
     } catch (e) {
       setMsg({ type: 'err', text: e.message })
     }
   }
 
   useEffect(() => { load() }, [filter])
+
+  async function report() {
+    try {
+      const url = await api.downloadReport()
+      const a = document.createElement('a'); a.href = url; a.download = 'compliance_report.csv'; a.click()
+    } catch (e) { setMsg({ type: 'err', text: e.message }) }
+  }
 
   async function verify() {
     try { setChain(await api.verifyChain()) } catch (e) { setMsg({ type: 'err', text: e.message }) }
@@ -130,6 +141,29 @@ export default function Officer() {
         ) : (
           notices.map((n) => <Case key={n.id} n={n} act={act} />)
         )}
+
+        <div className="card" style={{ marginTop: 16 }}>
+          <h3>Reviewer quality (hidden test photos)</h3>
+          {revs.map((r) => (
+            <p key={r.name} style={{ fontSize: 12, margin: '4px 0' }}>
+              {r.name} ({r.zone}) · test accuracy {r.test_accuracy == null ? 'n/a' : `${r.test_accuracy}% (${r.tests_correct}/${r.tests_answered})`} · agreed with final verdict {r.agree_with_majority}/{r.graded}
+            </p>
+          ))}
+        </div>
+
+        <div className="card">
+          <h3>Collectors and bonus</h3>
+          {cols.map((c) => (
+            <p key={c.name} style={{ fontSize: 12, margin: '4px 0' }}>
+              {c.name} · done {c.done} · missed {c.missed} · verified clean {c.verified_clean} · bonus ₹{c.bonus_rupees}
+            </p>
+          ))}
+        </div>
+
+        <div className="card">
+          <h3>Monthly compliance pack</h3>
+          <button className="btn btn-primary" onClick={report}>Download this month (CSV)</button>
+        </div>
 
         {missed.length > 0 && (
           <div className="card" style={{ marginTop: 16 }}>
