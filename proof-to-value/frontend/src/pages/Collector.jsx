@@ -95,9 +95,15 @@ export default function Collector() {
         requestAnimationFrame(tick)
       }
       tick()
-    } catch {
+    } catch (err) {
       stopScan()
-      setMsg({ type: 'err', text: 'Camera not available. Allow camera access (needs HTTPS) or type the code.' })
+      const why = !window.isSecureContext || !navigator.mediaDevices
+        ? `This page is not treated as secure (${window.location.origin}). In Chrome open chrome://flags, enable "Insecure origins treated as secure", add exactly this address, then relaunch Chrome. Or use an https link.`
+        : err?.name === 'NotAllowedError' ? 'Camera permission was denied. Allow Camera for this site in Chrome settings.'
+        : err?.name === 'NotFoundError' ? 'No camera found on this device.'
+        : err?.name === 'NotReadableError' ? 'Camera is in use by another app. Close it and retry.'
+        : `Camera error: ${err?.name || 'unknown'}`
+      setMsg({ type: 'err', text: why })
     }
   }
 
