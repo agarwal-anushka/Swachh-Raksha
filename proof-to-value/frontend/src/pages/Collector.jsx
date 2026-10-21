@@ -101,6 +101,16 @@ export default function Collector() {
     }
   }
 
+  async function lookupBin() {
+    setMsg(null)
+    setBin(null)
+    try {
+      setBin(await api.getBin(qr.trim()))
+    } catch (e) {
+      setMsg({ type: 'err', text: e.message || 'Bin not found' })
+    }
+  }
+
   function onPhoto(e) {
     const f = e.target.files?.[0]
     if (!f) return
