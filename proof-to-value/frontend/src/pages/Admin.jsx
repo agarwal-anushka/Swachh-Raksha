@@ -132,6 +132,7 @@ export default function Admin() {
 
         <div className="card">
           <h3>Bins ({bins.length})</h3>
+          <button className="btn btn-primary" onClick={() => nav('/qr-sheet')}>Open printable QR sheet</button>
           {bins.map((b) => (
             <div key={b.id} style={{ padding: '8px 0', borderBottom: '1px solid #e2e8f0', fontSize: 13 }}>
               <strong style={{ fontFamily: 'monospace' }}>{b.qr_code}</strong>

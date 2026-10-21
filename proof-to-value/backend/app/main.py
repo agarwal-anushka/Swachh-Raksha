@@ -82,6 +82,34 @@ def seed_data():
             ]
             db.add_all(bins)
             db.commit()
+
+            # FICTIONAL demo generators. Names are invented ("(Demo)"); localities are real areas of
+            # Gwalior used only so the data looks local. None of these are real establishments.
+            demo = [
+                ("Hotel Shri Gwalior Palace (Demo)", "hotel", "Zone-1", "Near City Centre, Gwalior"),
+                ("Maa Sharda Marriage Garden (Demo)", "banquet", "Zone-2", "Jhansi Road, Gwalior"),
+                ("Jan Seva Hospital (Demo)", "hospital", "Zone-3", "Thatipur, Gwalior"),
+                ("Fort View Mall (Demo)", "mall", "Zone-4", "Gola Ka Mandir, Gwalior"),
+                ("Saraswati Vidya Mandir (Demo)", "school", "Zone-1", "Morar, Gwalior"),
+                ("Lashkar Sabzi Mandi (Demo)", "market", "Zone-2", "Lashkar, Gwalior"),
+                ("Rail Yatri Canteen (Demo)", "canteen", "Zone-3", "Near Railway Station, Gwalior"),
+                ("Vigyan Engineering College (Demo)", "college", "Zone-4", "Bhind Road, Gwalior"),
+                ("Shri Balaji Mithai Bhandar (Demo)", "restaurant", "Zone-1", "Hazira, Gwalior"),
+                ("Radhe Krishna Vatika (Demo)", "banquet", "Zone-2", "Padav, Gwalior"),
+                ("Zila Karyalaya Canteen (Demo)", "office", "Zone-3", "Maharaj Bada, Gwalior"),
+                ("Phool Bagh Cinema Hall (Demo)", "mall", "Zone-4", "Phool Bagh, Gwalior"),
+            ]
+            n = len(bins)
+            for name, typ, zone, addr in demo:
+                g = models.Generator(name=name, type=typ, address=addr, zone=zone,
+                                     contact_name="Demo contact", contact_phone="9000000000")
+                db.add(g)
+                db.flush()
+                for stream in ("wet", "dry"):
+                    n += 1
+                    db.add(models.Bin(generator_id=g.id, stream=stream, qr_code=f"PTV-2026-{n:05d}",
+                                      label=f"{name} - {stream.title()}"))
+            db.commit()
             print("✅ Seed data created")
             print("   admin@ptv.local / admin123")
             print("   collector@ptv.local / collect123")

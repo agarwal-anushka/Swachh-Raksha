@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, getUser, clearAuth } from '../api/client'
+import jsQR from 'jsqr'
 import { compress, enqueue, listQueue, removeFromQueue } from '../api/offline'
 
 export default function Collector() {
@@ -17,7 +18,8 @@ export default function Collector() {
   const [stats, setStats] = useState(null)
   const [pending, setPending] = useState(0)
   const videoRef = useRef(null)
-  const canScan = typeof window !== 'undefined' && 'BarcodeDetector' in window
+  const streamRef = useRef(null)
+  const canvasRef = useRef(null)
 
   async function refresh() {
     api.myStats().then(setStats).catch(() => {})
@@ -54,43 +56,48 @@ export default function Collector() {
     )
   }, [])
 
+  function stopScan() {
+    streamRef.current?.getTracks().forEach((t) => t.stop())
+    streamRef.current = null
+    setScanning(false)
+  }
+
+  useEffect(() => stopScan, [])
+
+  // Works in any browser with a camera (jsQR reads video frames), over HTTPS or localhost.
   async function startScan() {
+    setMsg(null)
+    setBin(null)
     setScanning(true)
-    let stream
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-      videoRef.current.srcObject = stream
-      await videoRef.current.play()
-      const det = new window.BarcodeDetector({ formats: ['qr_code'] })
-      let stop = false
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      streamRef.current = stream
+      const video = videoRef.current
+      video.srcObject = stream
+      await video.play()
+      const canvas = canvasRef.current
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })
       const tick = async () => {
-        if (stop) return
-        const codes = await det.detect(videoRef.current).catch(() => [])
-        if (codes[0]) {
-          stop = true
-          stream.getTracks().forEach((t) => t.stop())
-          setScanning(false)
-          setQr(codes[0].rawValue)
-          try { setBin(await api.getBin(codes[0].rawValue)) } catch (e) { setMsg({ type: 'err', text: e.message }) }
-          return
+        if (!streamRef.current) return
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+          canvas.width = video.videoWidth
+          canvas.height = video.videoHeight
+          ctx.drawImage(video, 0, 0)
+          const img = ctx.getImageData(0, 0, canvas.width, canvas.height)
+          const code = jsQR(img.data, img.width, img.height)
+          if (code && code.data) {
+            stopScan()
+            setQr(code.data)
+            try { setBin(await api.getBin(code.data)) } catch (e) { setMsg({ type: 'err', text: e.message }) }
+            return
+          }
         }
         requestAnimationFrame(tick)
       }
       tick()
     } catch {
-      setScanning(false)
-      setMsg({ type: 'err', text: 'Camera not available. Type the code instead.' })
-    }
-  }
-
-  async function lookupBin() {
-    setMsg(null)
-    setBin(null)
-    try {
-      const data = await api.getBin(qr.trim())
-      setBin(data)
-    } catch (e) {
-      setMsg({ type: 'err', text: e.message || 'Bin not found' })
+      stopScan()
+      setMsg({ type: 'err', text: 'Camera not available. Allow camera access (needs HTTPS) or type the code.' })
     }
   }
 
@@ -157,16 +164,18 @@ export default function Collector() {
         {msg && <div className={`msg msg-${msg.type}`}>{msg.text}</div>}
 
         <div className="card">
-          <h3>Scan / Enter QR Code</h3>
+          <h3>Scan QR Code</h3>
+          <p style={{ fontSize: 11, color: '#718096', margin: '10px 0 4px' }}>Or type the code:</p>
           <input
             value={qr}
             onChange={(e) => setQr(e.target.value)}
             placeholder="PTV-2026-00001"
           />
-          {canScan && (
-            <button className="btn btn-ok" onClick={startScan} disabled={scanning}>Scan QR with camera</button>
-          )}
-          {scanning && <video ref={videoRef} playsInline muted className="photo-preview" />}
+          <button className="btn btn-ok" onClick={scanning ? stopScan : startScan}>
+            {scanning ? 'Cancel scan' : 'Scan QR with camera'}
+          </button>
+          <video ref={videoRef} playsInline muted className="photo-preview" style={{ display: scanning ? 'block' : 'none' }} />
+          <canvas ref={canvasRef} style={{ display: 'none' }} />
           <button className="btn btn-primary" onClick={lookupBin} disabled={!qr.trim()}>
             Lookup Bin
           </button>

@@ -14,7 +14,7 @@ PTV_DEMO=1 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000   # PTV_DEMO
 cd frontend && npm install && npm run dev      # http://localhost:5173
 ```
 
-Camera QR scan and GPS need HTTPS or localhost (use `ngrok http 5173` for a phone).
+Camera QR scan (any browser, via jsQR) and GPS need HTTPS or localhost (use `ngrok http 5173` for a phone).
 Set `PTV_SECRET_KEY` for anything beyond a demo. The database is `backend/proof_to_value.db` (SQLite) and photos are in `backend/uploads/`; both are git-ignored.
 
 ## Logins
@@ -27,7 +27,9 @@ Set `PTV_SECRET_KEY` for anything beyond a demo. The database is `backend/proof_
 | Case officer | officer@ptv.local | officer123 |
 | Generator (Hostel Block A) | generator@ptv.local | generator123 |
 
-Pre-seeded QR codes: `PTV-2026-00001..00005` (Hostel A wet/dry, Mess wet/dry, Academic C wet).
+Pre-seeded: 3 campus generators (`PTV-2026-00001..00005`) and 12 fictional Gwalior-style generators (hotel, hospital, mall, school, mandi and so on) with a wet and dry bin each. Business names are invented and marked "(Demo)"; only the locality names are real. Admin page > *Open printable QR sheet* shows every code to print or scan from a screen.
+
+To reset demo data, stop the server and delete `backend/proof_to_value.db`.
 
 ## Demo flow (about 3 minutes)
 

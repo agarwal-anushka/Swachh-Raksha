@@ -6,6 +6,7 @@ import Reviewer from './pages/Reviewer'
 import Officer from './pages/Officer'
 import Admin from './pages/Admin'
 import Generator from './pages/Generator'
+import QrSheet from './pages/QrSheet'
 
 function Private({ role, children }) {
   const user = getUser()
@@ -25,6 +26,7 @@ export default function App() {
       <Route path="/reviewer" element={<Private role="reviewer"><Reviewer /></Private>} />
       <Route path="/officer" element={<Private role="officer"><Officer /></Private>} />
       <Route path="/generator" element={<Private role="generator"><Generator /></Private>} />
+      <Route path="/qr-sheet" element={<Private role="admin"><QrSheet /></Private>} />
       <Route path="/admin" element={<Private role="admin"><Admin /></Private>} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
