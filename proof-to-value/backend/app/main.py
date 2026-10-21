@@ -52,9 +52,9 @@ def seed_data():
     try:
         if db.query(models.User).count() == 0:
             gens = [
-                models.Generator(name="Hostel Block A", type="hostel", address="North Campus", contact_name="Warden A", contact_phone="9000000001", zone="Zone-1"),
-                models.Generator(name="Central Mess", type="mess", address="Main Campus", contact_name="Mess Manager", contact_phone="9000000002", zone="Zone-2"),
-                models.Generator(name="Academic Block C", type="academic", address="South Campus", contact_name="Admin C", contact_phone="9000000003", zone="Zone-3"),
+                models.Generator(name="Hostel Block A", type="hostel", address="North Campus", contact_name="Warden A", contact_phone="9000000001", zone="Zone-1", latitude=26.2183, longitude=78.1828),
+                models.Generator(name="Central Mess", type="mess", address="Main Campus", contact_name="Mess Manager", contact_phone="9000000002", zone="Zone-2", latitude=26.2186, longitude=78.1832),
+                models.Generator(name="Academic Block C", type="academic", address="South Campus", contact_name="Admin C", contact_phone="9000000003", zone="Zone-3", latitude=26.2179, longitude=78.1824),
             ]
             db.add_all(gens)
             db.commit()
@@ -99,10 +99,12 @@ def seed_data():
                 ("Zila Karyalaya Canteen (Demo)", "office", "Zone-3", "Maharaj Bada, Gwalior"),
                 ("Phool Bagh Cinema Hall (Demo)", "mall", "Zone-4", "Phool Bagh, Gwalior"),
             ]
+            COORDS = {'Hotel Shri Gwalior Palace': (26.2124, 78.1772), 'Maa Sharda Marriage Garden': (26.233, 78.178), 'Jan Seva Hospital': (26.201, 78.21), 'Fort View Mall': (26.203, 78.158), 'Saraswati Vidya Mandir': (26.229, 78.235), 'Lashkar Sabzi Mandi': (26.199, 78.16), 'Rail Yatri Canteen': (26.221, 78.183), 'Vigyan Engineering College': (26.265, 78.2), 'Shri Balaji Mithai Bhandar': (26.202, 78.172), 'Radhe Krishna Vatika': (26.244, 78.195), 'Zila Karyalaya Canteen': (26.207, 78.165), 'Phool Bagh Cinema Hall': (26.21, 78.168)}  # approximate area centroids for the demo; admin can set the exact site GPS
             n = len(bins)
             for name, typ, zone, addr in demo:
                 g = models.Generator(name=name, type=typ, address=addr, zone=zone,
-                                     contact_name="Demo contact", contact_phone="9000000000")
+                                     contact_name="Demo contact", contact_phone="9000000000",
+                                     latitude=COORDS[name.replace(" (Demo)", "")][0], longitude=COORDS[name.replace(" (Demo)", "")][1])
                 db.add(g)
                 db.flush()
                 for stream in ("wet", "dry"):

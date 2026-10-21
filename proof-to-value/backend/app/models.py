@@ -33,6 +33,8 @@ class Generator(Base):
     address = Column(Text)
     contact_name = Column(String(100))
     contact_phone = Column(String(20))
+    latitude = Column(Numeric(10, 7))   # registered site location (for the "near site" check)
+    longitude = Column(Numeric(10, 7))
     zone = Column(String(50))  # reviewers from the same zone never see this generator's photos
     status = Column(String(20), default="active")
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -132,6 +134,7 @@ class Notice(Base):
     officer_id = Column(Integer, ForeignKey("users.id"))
     officer_remark = Column(Text)
     contest_text = Column(Text)
+    issued_at = Column(DateTime)  # when the officer confirmed it and it became visible to the generator
     contested_at = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime)

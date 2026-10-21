@@ -107,6 +107,7 @@ export const api = {
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Upload failed');
     return res.json();
   },
+  setLocation: (id, latitude, longitude) => request(`/admin/generators/${id}/location`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ latitude, longitude }) }),
   listTestPhotos: () => request('/admin/test-photos'),
 
   // Officer extras

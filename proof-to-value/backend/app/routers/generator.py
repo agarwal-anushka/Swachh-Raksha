@@ -5,6 +5,8 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import models, schemas, auth
+from ..services.geo import site_check
+from ..services.rules import RULES, LADDER
 
 router = APIRouter(prefix="/generator", tags=["generator"])
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
@@ -17,7 +19,10 @@ def _notice_out(n: models.Notice) -> dict:
             "photo_url": f"/generator/photo/{n.evidence_id}", "this_hash": ev.this_hash,
             "server_time": ev.server_time.isoformat(), "bin_label": ev.pickup.bin.label,
             "officer_remark": n.officer_remark, "contest_text": n.contest_text,
-            "created_at": n.created_at.isoformat()}
+            "created_at": n.created_at.isoformat(),
+            "issued_at": n.issued_at.isoformat() if n.issued_at else None,
+            "generator_name": n.generator.name, "ladder_text": LADDER.get(n.level, n.level), "rules": RULES,
+            **site_check(ev, n.generator)}
 
 
 @router.get("/me")

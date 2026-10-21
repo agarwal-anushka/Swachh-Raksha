@@ -75,6 +75,10 @@ async def submit_pickup(
         except Exception:
             raise HTTPException(400, "File is not a valid image")
 
+    if status == "done" and db.query(models.Evidence).filter(
+            models.Evidence.photo_hash == compute_photo_hash(content)).first():
+        raise HTTPException(409, "This exact photo was already submitted. Take a fresh photo at the bin.")
+
     with CHAIN_LOCK:  # one writer extends the chain at a time
         pickup = models.Pickup(
             bin_id=bin_obj.id,

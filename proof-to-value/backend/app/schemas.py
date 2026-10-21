@@ -47,6 +47,8 @@ class GeneratorCreate(BaseModel):
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
     zone: Optional[str] = None
+    latitude: Optional[Decimal] = None
+    longitude: Optional[Decimal] = None
 
 
 class GeneratorOut(BaseModel):
@@ -57,6 +59,8 @@ class GeneratorOut(BaseModel):
     contact_name: Optional[str]
     contact_phone: Optional[str]
     zone: Optional[str] = None
+    latitude: Optional[Decimal] = None
+    longitude: Optional[Decimal] = None
     status: str
 
     class Config:
@@ -153,6 +157,11 @@ class VerdictOut(BaseModel):
 class NoticeAction(BaseModel):
     action: str  # confirm | dismiss | uphold | withdraw
     remark: Optional[str] = None
+
+
+class LocationIn(BaseModel):
+    latitude: float
+    longitude: float
 
 
 class ContestIn(BaseModel):

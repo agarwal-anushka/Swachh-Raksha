@@ -118,6 +118,14 @@ export default function Admin() {
         </div>
 
         <div className="card">
+          <h3>Registered site locations</h3>
+          <p style={{ fontSize: 12, color: '#4A5568', marginBottom: 8 }}>
+            Each photo is compared with its generator's registered point. Stand at the bins and press "Use my location", or type coordinates.
+          </p>
+          {gens.map((g) => <SiteRow key={g.id} g={g} onSaved={load} setMsg={setMsg} />)}
+        </div>
+
+        <div className="card">
           <h3>Hidden test photos ({tests.length})</h3>
           <p style={{ fontSize: 12, color: '#4A5568', marginBottom: 8 }}>Known-answer photos silently mixed into reviewers' queues to measure reviewer quality.</p>
           <form onSubmit={addTest}>
@@ -156,4 +164,30 @@ function QR({ id }) {
   const [src, setSrc] = useState(null)
   useEffect(() => { api.qrBlob(id).then(setSrc).catch(() => {}) }, [id])
   return src ? <img src={src} alt="QR" style={{ width: 96, height: 96, marginTop: 6 }} /> : null
+}
+
+function SiteRow({ g, onSaved, setMsg }) {
+  const [lat, setLat] = useState(g.latitude ?? '')
+  const [lon, setLon] = useState(g.longitude ?? '')
+  function here() {
+    navigator.geolocation?.getCurrentPosition(
+      (p) => { setLat(p.coords.latitude.toFixed(6)); setLon(p.coords.longitude.toFixed(6)) },
+      () => setMsg({ type: 'err', text: 'Location unavailable (needs HTTPS or localhost, and permission).' })
+    )
+  }
+  async function save() {
+    try { await api.setLocation(g.id, Number(lat), Number(lon)); setMsg({ type: 'ok', text: `Location saved for ${g.name}` }); onSaved() }
+    catch (e) { setMsg({ type: 'err', text: e.message }) }
+  }
+  return (
+    <div style={{ padding: '8px 0', borderBottom: '1px solid #e2e8f0', fontSize: 12 }}>
+      <strong>{g.name}</strong>
+      <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+        <input value={lat} onChange={(e) => setLat(e.target.value)} placeholder="lat" style={{ width: '30%' }} />
+        <input value={lon} onChange={(e) => setLon(e.target.value)} placeholder="lon" style={{ width: '30%' }} />
+        <button onClick={here}>Use my location</button>
+        <button onClick={save}>Save</button>
+      </div>
+    </div>
+  )
 }

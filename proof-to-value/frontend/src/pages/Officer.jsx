@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, getUser, clearAuth } from '../api/client'
+import NoticeLetter, { siteLine, RulesBox } from '../components/NoticeLetter'
 
 export default function Officer() {
   const user = getUser()
@@ -54,8 +55,10 @@ export default function Officer() {
 
   async function act(id, action) {
     try {
-      await api.noticeAction(id, action)
-      setMsg({ type: 'ok', text: `Notice ${action}ed` })
+      const r = await api.noticeAction(id, action)
+      setMsg({ type: 'ok', text: action === 'confirm'
+        ? `Notice issued to ${r.generator_name}. It is now visible in their Proof-to-Value login, and a printable letter is available. (SMS / WhatsApp delivery is planned, not built.)`
+        : `Notice ${action}ed` })
       load()
     } catch (e) {
       setMsg({ type: 'err', text: e.message })
@@ -181,6 +184,7 @@ export default function Officer() {
 }
 
 function Case({ n, act }) {
+  const site = siteLine(n)
   const [src, setSrc] = useState(null)
   useEffect(() => { if (n.photo_url) api.photoBlob(n.photo_url).then(setSrc).catch(() => {}) }, [n.photo_url])
   return (
@@ -192,6 +196,10 @@ function Case({ n, act }) {
         {' '}· Mixed in last 30 days: {n.mixed_last_30_days} · all time: {n.mixed_all_time}
       </p>
       {src && <img src={src} alt="evidence" className="photo-preview" />}
+      <p style={{ fontSize: 12, margin: '4px 0', color: site.ok ? '#276749' : '#9C4221', fontWeight: 600 }}>
+        {site.ok ? '✔' : '⚠'} {site.text}
+      </p>
+      <RulesBox rules={n.rules} />
       <p style={{ fontSize: 11, color: '#718096', wordBreak: 'break-all' }}>
         Captured {new Date(n.server_time).toLocaleString()}
         {n.latitude != null && ` · ${n.latitude.toFixed(5)}, ${n.longitude.toFixed(5)}`}<br />
@@ -205,6 +213,7 @@ function Case({ n, act }) {
           <button className="btn btn-outline" style={{ padding: 8 }} onClick={() => act(n.id, 'dismiss')}>Dismiss</button>
         </div>
       )}
+      {n.issued_at && <NoticeLetter n={n} photoUrl={n.photo_url} />}
       {n.status === 'contested' && (
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
           <button className="btn btn-ok" style={{ padding: 8 }} onClick={() => act(n.id, 'uphold')}>Uphold</button>

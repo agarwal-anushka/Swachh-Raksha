@@ -142,3 +142,16 @@ async def add_test_photo(expected: str = Form(...), photo: UploadFile = File(...
 @router.get("/test-photos")
 def list_test_photos(db: Session = Depends(get_db), _: models.User = ADMIN):
     return [{"id": t.id, "expected": t.expected} for t in db.query(models.TestPhoto).all()]
+
+
+@router.patch("/generators/{generator_id}/location")
+def set_location(generator_id: int, payload: schemas.LocationIn, db: Session = Depends(get_db), _: models.User = ADMIN):
+    """Register where a generator's bins are. Photos are compared against this point."""
+    g = db.query(models.Generator).filter(models.Generator.id == generator_id).first()
+    if not g:
+        raise HTTPException(404, "Generator not found")
+    if not (-90 <= payload.latitude <= 90 and -180 <= payload.longitude <= 180):
+        raise HTTPException(400, "Invalid coordinates")
+    g.latitude, g.longitude = payload.latitude, payload.longitude
+    db.commit()
+    return {"id": g.id, "latitude": payload.latitude, "longitude": payload.longitude}

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, getUser, clearAuth } from '../api/client'
 import jsQR from 'jsqr'
-import { compress, enqueue, listQueue, removeFromQueue } from '../api/offline'
+import { enqueue, listQueue, removeFromQueue } from '../api/offline'
 
 export default function Collector() {
   const user = getUser()
@@ -17,6 +17,10 @@ export default function Collector() {
   const [gps, setGps] = useState(null)
   const [stats, setStats] = useState(null)
   const [pending, setPending] = useState(0)
+  const [camOn, setCamOn] = useState(false)
+  const [capturedAt, setCapturedAt] = useState(null)
+  const shotRef = useRef(null)
+  const shotStream = useRef(null)
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const canvasRef = useRef(null)
@@ -55,6 +59,55 @@ export default function Collector() {
       { enableHighAccuracy: true, timeout: 8000 }
     )
   }, [])
+
+  function cameraError(err) {
+    return !window.isSecureContext || !navigator.mediaDevices
+      ? `This page is not treated as secure (${window.location.origin}). In Chrome open chrome://flags, enable "Insecure origins treated as secure", add exactly this address, then relaunch Chrome. Or use an https link.`
+      : err?.name === 'NotAllowedError' ? 'Camera permission was denied. Allow Camera for this site in Chrome settings.'
+      : err?.name === 'NotFoundError' ? 'No camera found on this device.'
+      : err?.name === 'NotReadableError' ? 'Camera is in use by another app. Close it and retry.'
+      : `Camera error: ${err?.name || 'unknown'}`
+  }
+
+  // Evidence photos come ONLY from this live camera: there is no file picker, so a gallery image cannot be chosen.
+  function stopShot() {
+    shotStream.current?.getTracks().forEach((t) => t.stop())
+    shotStream.current = null
+    setCamOn(false)
+  }
+
+  async function openShotCamera() {
+    setPhoto(null); setPreview(null); setCapturedAt(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      shotStream.current = stream
+      setCamOn(true)
+      const v = shotRef.current
+      if (v) { v.srcObject = stream; await v.play().catch(() => {}) }
+    } catch (err) {
+      stopShot()
+      setMsg({ type: 'err', text: cameraError(err) })
+    }
+  }
+
+  function takeShot() {
+    const v = shotRef.current
+    if (!v || !v.videoWidth) return
+    const scale = Math.min(1, 1600 / Math.max(v.videoWidth, v.videoHeight)) // compress on the phone
+    const c = document.createElement('canvas')
+    c.width = Math.round(v.videoWidth * scale)
+    c.height = Math.round(v.videoHeight * scale)
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height)
+    c.toBlob((blob) => {
+      const f = new File([blob], 'bin.jpg', { type: 'image/jpeg' })
+      setPhoto(f); setPreview(URL.createObjectURL(f)); setCapturedAt(new Date().toISOString())
+      stopShot()
+    }, 'image/jpeg', 0.8)
+  }
+
+  // Continuous flow: as soon as a bin is identified (scan or typed), the live camera opens.
+  useEffect(() => { if (bin && !photo) openShotCamera(); if (!bin) stopShot() }, [bin])
+  useEffect(() => () => stopShot(), [])
 
   function stopScan() {
     streamRef.current?.getTracks().forEach((t) => t.stop())
@@ -105,12 +158,7 @@ export default function Collector() {
       tick()
     } catch (err) {
       stopScan()
-      const why = !window.isSecureContext || !navigator.mediaDevices
-        ? `This page is not treated as secure (${window.location.origin}). In Chrome open chrome://flags, enable "Insecure origins treated as secure", add exactly this address, then relaunch Chrome. Or use an https link.`
-        : err?.name === 'NotAllowedError' ? 'Camera permission was denied. Allow Camera for this site in Chrome settings.'
-        : err?.name === 'NotFoundError' ? 'No camera found on this device.'
-        : err?.name === 'NotReadableError' ? 'Camera is in use by another app. Close it and retry.'
-        : `Camera error: ${err?.name || 'unknown'}`
+      const why = cameraError(err)
       setMsg({ type: 'err', text: why })
     }
   }
@@ -125,12 +173,6 @@ export default function Collector() {
     }
   }
 
-  function onPhoto(e) {
-    const f = e.target.files?.[0]
-    if (!f) return
-    compress(f).then((small) => { setPhoto(small); setPreview(URL.createObjectURL(small)) })
-  }
-
   async function submit(status) {
     if (!bin) return
     if (status === 'done' && !photo) {
@@ -143,7 +185,7 @@ export default function Collector() {
       const fd = new FormData()
       fd.append('bin_qr', bin.qr_code)
       fd.append('status', status)
-      fd.append('device_time', new Date().toISOString())
+      fd.append('device_time', capturedAt || new Date().toISOString())
       if (gps) { fd.append('latitude', gps.lat); fd.append('longitude', gps.lon) }
       if (photo) fd.append('photo', photo)
       try {
@@ -162,6 +204,8 @@ export default function Collector() {
       setQr('')
       setPhoto(null)
       setPreview(null)
+      setCapturedAt(null)
+      stopShot()
     } catch (e) {
       setMsg({ type: 'err', text: e.message })
     } finally {
@@ -221,9 +265,19 @@ export default function Collector() {
               {bin.label && <> · {bin.label}</>}
             </p>
 
-            <label>Photo of open bin</label>
-            <input type="file" accept="image/*" capture="environment" onChange={onPhoto} />
-            {preview && <img src={preview} alt="preview" className="photo-preview" />}
+            <label>Photo of the open bin (live camera only)</label>
+            <video ref={shotRef} playsInline muted className="photo-preview" style={{ display: camOn ? 'block' : 'none' }} />
+            {camOn && <button className="btn btn-primary" onClick={takeShot}>Capture photo</button>}
+            {preview && (
+              <>
+                <img src={preview} alt="captured" className="photo-preview" />
+                <button className="btn btn-outline" onClick={openShotCamera}>Retake</button>
+              </>
+            )}
+            {!camOn && !preview && <button className="btn btn-primary" onClick={openShotCamera}>Open camera</button>}
+            <p style={{ fontSize: 11, color: '#718096', margin: '4px 0 8px' }}>
+              No gallery uploads: the photo is taken here, timestamped on capture and checked against the bin's registered location.
+            </p>
 
             <button
               className="btn btn-ok"

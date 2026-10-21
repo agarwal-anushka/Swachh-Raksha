@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, getUser, clearAuth } from '../api/client'
+import NoticeLetter, { siteLine, RulesBox } from '../components/NoticeLetter'
 
 function Photo({ url }) {
   const [src, setSrc] = useState(null)
@@ -56,9 +57,12 @@ export default function Generator() {
                 <span className={`level level-${n.level}`}>{n.level.replace('_', ' ')}</span>
                 <p style={{ fontSize: 13, margin: '4px 0' }}>{n.bin_label} · {new Date(n.server_time).toLocaleString()}</p>
                 <Photo url={n.photo_url} />
+                <p style={{ fontSize: 12, margin: '4px 0', fontWeight: 600, color: siteLine(n).ok ? '#276749' : '#9C4221' }}>{siteLine(n).text}</p>
+                <RulesBox rules={n.rules} />
                 <p style={{ fontSize: 11, color: '#718096', wordBreak: 'break-all' }}>Evidence hash: {n.this_hash}</p>
                 <p style={{ fontSize: 12, margin: '6px 0' }}>Status: <strong>{n.status}</strong>{n.officer_remark ? ` · Officer: ${n.officer_remark}` : ''}</p>
                 {n.contest_text && <p style={{ fontSize: 12 }}>Your contest: {n.contest_text}</p>}
+                <NoticeLetter n={n} photoUrl={n.photo_url} />
                 {n.status === 'confirmed' && (
                   <>
                     <textarea rows={2} style={{ width: '100%', margin: '6px 0' }} placeholder="Why do you contest this notice?"

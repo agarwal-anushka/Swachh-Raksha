@@ -7,6 +7,8 @@ from ..database import get_db
 from .. import models, schemas, auth
 from ..services.hash_chain import verify_chain
 from ..services.verdict import mixed_in_window
+from ..services.geo import site_check
+from ..services.rules import RULES, LADDER
 
 router = APIRouter(prefix="/officer", tags=["officer"])
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
@@ -39,6 +41,11 @@ def case_view(db: Session, n: models.Notice) -> dict:
             .filter(models.Bin.generator_id == n.generator_id, models.Verdict.final_verdict == "mixed").count(),
         "officer_remark": n.officer_remark, "contest_text": n.contest_text,
         "created_at": n.created_at.isoformat(),
+        "issued_at": n.issued_at.isoformat() if n.issued_at else None,
+        "ladder_text": LADDER.get(n.level, n.level), "rules": RULES,
+        "site_lat": float(gen.latitude) if gen and gen.latitude is not None else None,
+        "site_lon": float(gen.longitude) if gen and gen.longitude is not None else None,
+        **site_check(ev, gen),
     }
 
 
@@ -75,6 +82,8 @@ def act_on_notice(notice_id: int, payload: schemas.NoticeAction, db: Session = D
     if payload.action not in allowed:
         raise HTTPException(400, f"Cannot '{payload.action}' a notice that is {notice.status}")
     notice.status = allowed[payload.action]
+    if payload.action == "confirm":
+        notice.issued_at = datetime.utcnow()  # visible to the generator from now on
     notice.officer_id = current_user.id
     notice.officer_remark = payload.remark or notice.officer_remark
     notice.updated_at = datetime.utcnow()
