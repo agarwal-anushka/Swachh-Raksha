@@ -122,7 +122,7 @@ export default function Admin() {
           <p style={{ fontSize: 12, color: '#4A5568', marginBottom: 8 }}>
             Each photo is compared with its generator's registered point. Stand at the bins and press "Use my location", or type coordinates.
           </p>
-          {gens.map((g) => <SiteRow key={g.id} g={g} onSaved={load} setMsg={setMsg} />)}
+          {gens.map((g) => <SiteRow key={g.id} g={g} onSaved={load} />)}
         </div>
 
         <div className="card">
@@ -166,19 +166,32 @@ function QR({ id }) {
   return src ? <img src={src} alt="QR" style={{ width: 96, height: 96, marginTop: 6 }} /> : null
 }
 
-function SiteRow({ g, onSaved, setMsg }) {
+function SiteRow({ g, onSaved }) {
   const [lat, setLat] = useState(g.latitude ?? '')
   const [lon, setLon] = useState(g.longitude ?? '')
+  const [note, setNote] = useState(null) // result shown right next to the buttons, not at the top of the page
+
   function here() {
-    navigator.geolocation?.getCurrentPosition(
-      (p) => { setLat(p.coords.latitude.toFixed(6)); setLon(p.coords.longitude.toFixed(6)) },
-      () => setMsg({ type: 'err', text: 'Location unavailable (needs HTTPS or localhost, and permission).' })
+    setNote({ ok: true, text: 'Getting location…' })
+    if (!navigator.geolocation) return setNote({ ok: false, text: 'This browser has no location support.' })
+    navigator.geolocation.getCurrentPosition(
+      (p) => { setLat(p.coords.latitude.toFixed(6)); setLon(p.coords.longitude.toFixed(6)); setNote({ ok: true, text: 'Got it. Now press Save.' }) },
+      () => setNote({ ok: false, text: 'Location blocked. Use localhost or https, allow location, or type the numbers.' }),
+      { enableHighAccuracy: true, timeout: 10000 }
     )
   }
+
   async function save() {
-    try { await api.setLocation(g.id, Number(lat), Number(lon)); setMsg({ type: 'ok', text: `Location saved for ${g.name}` }); onSaved() }
-    catch (e) { setMsg({ type: 'err', text: e.message }) }
+    const la = parseFloat(lat), lo = parseFloat(lon)
+    if (lat === '' || lon === '' || Number.isNaN(la) || Number.isNaN(lo)) return setNote({ ok: false, text: 'Enter both latitude and longitude (numbers).' })
+    if (Math.abs(la) > 90 || Math.abs(lo) > 180) return setNote({ ok: false, text: 'Coordinates out of range.' })
+    try {
+      await api.setLocation(g.id, la, lo)
+      setNote({ ok: true, text: `Saved ✔ (${la.toFixed(5)}, ${lo.toFixed(5)})` })
+      onSaved()
+    } catch (e) { setNote({ ok: false, text: e.message }) }
   }
+
   return (
     <div style={{ padding: '8px 0', borderBottom: '1px solid #e2e8f0', fontSize: 12 }}>
       <strong>{g.name}</strong>
@@ -188,6 +201,7 @@ function SiteRow({ g, onSaved, setMsg }) {
         <button onClick={here}>Use my location</button>
         <button onClick={save}>Save</button>
       </div>
+      {note && <div style={{ marginTop: 4, fontWeight: 600, color: note.ok ? '#276749' : '#C53030' }}>{note.text}</div>}
     </div>
   )
 }
